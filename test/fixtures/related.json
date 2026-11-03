@@ -1,0 +1,1105 @@
+{
+ "has_more": true,
+ "items": [
+  {
+   "id": "7682106451331008522",
+   "type": "track",
+   "entity": {
+    "track_wrapper": {
+     "track": {
+      "id": "7682106451331008522",
+      "album": {
+       "id": "7682106451330975754",
+       "name": "一壶老酒",
+       "release_date": 1788652802,
+       "url_cover": {
+        "uri": "tos-cn-v-2774c002/ooPTGErjO9AAA7xBCIgEViQbxicGhaWWJVpAi",
+        "urls": [
+         "https://p3-luna.douyinpic.com/img/",
+         "https://p6-luna.douyinpic.com/img/"
+        ],
+        "template_prefix": "tplv-b829550vbb"
+       },
+       "url_player_bg": {
+        "uri": "tos-cn-v-2774c002/ooPTGErjO9AAA7xBCIgEViQbxicGhaWWJVpAi",
+        "urls": [
+         "https://p3-luna.douyinpic.com/img/",
+         "https://p6-luna.douyinpic.com/img/"
+        ],
+        "template": "background:${width}:${height}:30:90:0",
+        "template_prefix": "tplv-b829550vbb"
+       },
+       "cover_gradient_effect_color": [
+        {
+         "rgb": "773d10"
+        },
+        {
+         "rgb": "381a03"
+        }
+       ],
+       "playing_wave_color": null,
+       "paused_wave_color": null
+      },
+      "artists": [
+       {
+        "id": "7632713586151163904",
+        "name": "季星眠",
+        "url_avatar": {
+         "uri": "tos-cn-v-2774c002/oM87DfehtEkCEy3ujApgFBDsEVZNCAzKDAFAAc",
+         "urls": [
+          "https://p3-luna.douyinpic.com/img/",
+          "https://p6-luna.douyinpic.com/img/"
+         ],
+         "template_prefix": "tplv-b829550vbb"
+        },
+        "state": {
+         "blocked_by_me": false
+        },
+        "user_info": {
+         "id": "3878670516623239",
+         "nickname": "理解",
+         "medium_avatar_url": {
+          "uri": "aweme-avatar/tos-cn-i-0813c001_owqACJeQ9C5IlAF96AoQT33AAnAGg5fEDNUDEo",
+          "urls": [
+           "https://p3.douyinpic.com/aweme/720x720/aweme-avatar/tos-cn-i-0813c001_owqACJeQ9C5IlAF96AoQT33AAnAGg5fEDNUDEo.jpeg?from=3782654143",
+           "https://p11.douyinpic.com/aweme/720x720/aweme-avatar/tos-cn-i-0813c001_owqACJeQ9C5IlAF96AoQT33AAnAGg5fEDNUDEo.jpeg?from=3782654143",
+           "https://p26.douyinpic.com/aweme/720x720/aweme-avatar/tos-cn-i-0813c001_owqACJeQ9C5IlAF96AoQT33AAnAGg5fEDNUDEo.jpeg?from=3782654143"
+          ],
+          "need_complete_url": true
+         },
+         "thumb_avatar_url": {
+          "uri": "aweme-avatar/tos-cn-i-0813c001_owqACJeQ9C5IlAF96AoQT33AAnAGg5fEDNUDEo",
+          "urls": [
+           "https://p11.douyinpic.com/aweme/100x100/aweme-avatar/tos-cn-i-0813c001_owqACJeQ9C5IlAF96AoQT33AAnAGg5fEDNUDEo.jpeg?from=3782654143",
+           "https://p3.douyinpic.com/aweme/100x100/aweme-avatar/tos-cn-i-0813c001_owqACJeQ9C5IlAF96AoQT33AAnAGg5fEDNUDEo.jpeg?from=3782654143",
+           "https://p26.douyinpic.com/aweme/100x100/aweme-avatar/tos-cn-i-0813c001_owqACJeQ9C5IlAF96AoQT33AAnAGg5fEDNUDEo.jpeg?from=3782654143"
+          ],
+          "need_complete_url": true
+         },
+         "artist_id": "7632713586151163904",
+         "secret": false,
+         "test_tag": 0,
+         "vip_stage": "",
+         "is_vip": false,
+         "is_luna_user": false
+        },
+        "simple_display_name": "季星眠",
+        "user_artist_type": 2
+       }
+      ],
+      "duration": 256584,
+      "name": "一壶老酒",
+      "preview": {},
+      "state": {},
+      "stats": {
+       "count_collected": 27,
+       "count_shared": 6
+      },
+      "vid": "v0dad6g10000dae590nog65tgeubnafg",
+      "label_info": {
+       "only_vip_download": true,
+       "quality_only_vip_can_download": [
+        "medium",
+        "higher",
+        "highest",
+        "lossless"
+       ],
+       "quality_only_vip_can_play": [
+        "lossless"
+       ],
+       "quality_map": {
+        "medium": {
+         "play_detail": {
+          "condition": "benefit_play_medium",
+          "need_vip": false,
+          "need_purchase": false
+         },
+         "download_detail": {
+          "condition": "benefit_download_medium",
+          "need_vip": true,
+          "need_purchase": false
+         }
+        },
+        "higher": {
+         "play_detail": {
+          "condition": "benefit_play_higher",
+          "need_vip": false,
+          "need_purchase": false
+         },
+         "download_detail": {
+          "condition": "benefit_download_higher",
+          "need_vip": true,
+          "need_purchase": false
+         }
+        },
+        "highest": {
+         "play_detail": {
+          "condition": "benefit_play_highest",
+          "need_vip": false,
+          "need_purchase": false
+         },
+         "download_detail": {
+          "condition": "benefit_download_highest",
+          "need_vip": true,
+          "need_purchase": false
+         }
+        },
+        "lossless": {
+         "play_detail": {
+          "condition": "benefit_play_lossless",
+          "need_vip": true,
+          "need_purchase": false
+         },
+         "download_detail": {
+          "condition": "benefit_download_lossless",
+          "need_vip": true,
+          "need_purchase": false
+         }
+        },
+        "spatial": {
+         "play_detail": {
+          "condition": "benefit_play_spatial",
+          "need_vip": true,
+          "need_purchase": false
+         },
+         "download_detail": {
+          "condition": "benefit_download_spatial",
+          "need_vip": true,
+          "need_purchase": false
+         }
+        },
+        "hi_res": {
+         "play_detail": {
+          "condition": "benefit_play_hi_res",
+          "need_vip": true,
+          "need_purchase": false
+         },
+         "download_detail": null
+        }
+       }
+      },
+      "sim_id": 7075323069351266000,
+      "bit_rates": [
+       {
+        "br": 68202,
+        "size": 2187466,
+        "quality": "medium"
+       },
+       {
+        "br": 132200,
+        "size": 4240096,
+        "quality": "higher"
+       },
+       {
+        "br": 260229,
+        "size": 8346389,
+        "quality": "highest"
+       }
+      ],
+      "audition_info": {},
+      "recommend_content_source": "empty",
+      "song_maker_team": {
+       "composers": [
+        {
+         "name": "季星眠"
+        }
+       ],
+       "lyricists": [
+        {
+         "name": "季星眠"
+        }
+       ]
+      },
+      "media_type": "track",
+      "chorus": {
+       "duration": 0,
+       "start": 119232
+      },
+      "colors": {
+       "cover_gradient_effect_color": [
+        {
+         "rgb": "773d10"
+        },
+        {
+         "rgb": "381a03"
+        }
+       ],
+       "normal_lyric_color": {
+        "rgb": "ce9467"
+       },
+       "playing_lyric_color": {
+        "rgb": "fff1e5"
+       },
+       "recommend_reason_background_color": {
+        "rgb": "311805",
+        "alpha": "8c"
+       },
+       "featured_comment_tag_color": {
+        "rgb": "cfa07d"
+       },
+       "background_color": {
+        "rgb": "381a03"
+       },
+       "playing_wave_color": {
+        "rgb": "bf7740"
+       },
+       "paused_wave_color": {
+        "rgb": "836b59",
+        "alpha": "bf"
+       },
+       "comment_share_additional_color": {
+        "rgb": "381a03"
+       },
+       "base_colors": [
+        {
+         "rgb": "fff1e5"
+        },
+        {
+         "rgb": "ffbf8e"
+        },
+        {
+         "rgb": "e59251"
+        },
+        {
+         "rgb": "b86627"
+        },
+        {
+         "rgb": "773d10"
+        },
+        {
+         "rgb": "67330c"
+        },
+        {
+         "rgb": "552a08"
+        },
+        {
+         "rgb": "432005"
+        },
+        {
+         "rgb": "311702"
+        }
+       ],
+       "non_interactive_anchor_background": {
+        "rgb": "61310d",
+        "alpha": "8c"
+       }
+      },
+      "limited_free_info": null,
+      "vocal": 1,
+      "lang_codes": [
+       "ZH"
+      ],
+      "first_vocal": {
+       "duration": 40704,
+       "start": 40512
+      },
+      "sharable_platforms": [
+       "link",
+       "aweme",
+       "aweme_publish",
+       "wechat_zone",
+       "wechat",
+       "weibo",
+       "qq_zone",
+       "qq"
+      ],
+      "playable_range": {
+       "duration": 26496,
+       "start": 168192
+      },
+      "sim_id_v3": 400141286658,
+      "plug_status": {
+       "can_plug": false,
+       "is_plugged": false
+      },
+      "tags": [
+       {
+        "category": {
+         "tag_id": 1,
+         "tag_name": "Genre"
+        },
+        "first_level_tag": {
+         "tag_id": 6826166696038894000,
+         "tag_name": "Chinese Tradition"
+        }
+       }
+      ],
+      "nodes": [
+       {
+        "type": 1,
+        "start": 40512,
+        "duration": 40704,
+        "priority": 1,
+        "opacity": 0.5
+       },
+       {
+        "type": 2,
+        "start": 119232,
+        "duration": 0,
+        "opacity": 1
+       }
+      ],
+      "is_support_bell": true,
+      "check_context": "{\"version\":\"1792064287-1836997954321345411-bit_rates\",\"req_time\":1793745299}",
+      "karaoke": {
+       "supported": true
+      },
+      "lyric_poster": {
+       "disabled": false
+      }
+     },
+     "limited_free_info": {
+      "queue_types": null,
+      "limited_free": false,
+      "expire_time": 1793918099,
+      "sign": "1866979bf632ec49f0f06b555d458846",
+      "sign_version": "2.0",
+      "limited_free_type": "sell",
+      "rewind_prev_intercept_type": "",
+      "intercept_type": "",
+      "track_value": ""
+     }
+    }
+   },
+   "card_context": {},
+   "predict_info": {}
+  },
+  {
+   "id": "7663057334178187273",
+   "type": "track",
+   "entity": {
+    "track_wrapper": {
+     "track": {
+      "id": "7663057334178187273",
+      "album": {
+       "id": "7664882820673898537",
+       "name": "昨天太重 明天太远",
+       "release_date": 1784563200,
+       "url_cover": {
+        "uri": "tos-cn-v-2774c002/oICAAtmqCEnAAZpI5YffBFPXCDrcOzIyCLzGjg",
+        "urls": [
+         "https://p3-luna.douyinpic.com/img/",
+         "https://p6-luna.douyinpic.com/img/"
+        ],
+        "template_prefix": "tplv-b829550vbb"
+       },
+       "url_player_bg": {
+        "uri": "tos-cn-v-2774c002/oICAAtmqCEnAAZpI5YffBFPXCDrcOzIyCLzGjg",
+        "urls": [
+         "https://p3-luna.douyinpic.com/img/",
+         "https://p6-luna.douyinpic.com/img/"
+        ],
+        "template": "background:${width}:${height}:30:90:0",
+        "template_prefix": "tplv-b829550vbb"
+       },
+       "cover_gradient_effect_color": [
+        {
+         "rgb": "384347"
+        },
+        {
+         "rgb": "161b1d"
+        }
+       ],
+       "playing_wave_color": null,
+       "paused_wave_color": null
+      },
+      "artists": [
+       {
+        "id": "7647341210487736336",
+        "name": "林子沐",
+        "url_avatar": {
+         "uri": "tos-cn-v-2774c002/ogZrfAAyUBDQ2JnBC1FEAfD7aQFzKsAIITfxga",
+         "urls": [
+          "https://p3-luna.douyinpic.com/img/",
+          "https://p6-luna.douyinpic.com/img/"
+         ],
+         "template_prefix": "tplv-b829550vbb"
+        },
+        "state": {
+         "blocked_by_me": false
+        },
+        "simple_display_name": "林子沐",
+        "user_artist_type": 1
+       }
+      ],
+      "duration": 150305,
+      "name": "触不可及刚刚好 日久天长让人恼",
+      "preview": {
+       "duration": 60047,
+       "start": 43200,
+       "vid": "v02ad6g10000daad0m7og65oei81ver0",
+       "bit_rates": [
+        {
+         "br": 68440,
+         "size": 513302,
+         "quality": "medium"
+        },
+        {
+         "br": 132423,
+         "size": 993179,
+         "quality": "higher"
+        },
+        {
+         "br": 260457,
+         "size": 1953429,
+         "quality": "highest"
+        }
+       ]
+      },
+      "state": {},
+      "stats": {
+       "count_collected": 16248,
+       "count_comment": 26,
+       "count_shared": 246
+      },
+      "vid": "v02ad6g10000d9fk1svog65hhcr1ln3g",
+      "label_info": {
+       "only_vip_download": true,
+       "only_vip_playable": true,
+       "quality_only_vip_can_download": [
+        "medium",
+        "higher",
+        "highest",
+        "lossless"
+       ],
+       "quality_only_vip_can_play": [
+        "lossless"
+       ],
+       "quality_map": {
+        "lossless": {
+         "play_detail": {
+          "condition": "benefit_play_lossless",
+          "need_vip": true,
+          "need_purchase": false
+         },
+         "download_detail": {
+          "condition": "benefit_download_lossless",
+          "need_vip": true,
+          "need_purchase": false
+         }
+        },
+        "spatial": {
+         "play_detail": {
+          "condition": "benefit_play_spatial",
+          "need_vip": true,
+          "need_purchase": false
+         },
+         "download_detail": {
+          "condition": "benefit_download_spatial",
+          "need_vip": true,
+          "need_purchase": false
+         }
+        },
+        "hi_res": {
+         "play_detail": {
+          "condition": "benefit_play_hi_res",
+          "need_vip": true,
+          "need_purchase": false
+         },
+         "download_detail": null
+        },
+        "medium": {
+         "play_detail": {
+          "condition": "benefit_play_medium",
+          "need_vip": false,
+          "need_purchase": false
+         },
+         "download_detail": {
+          "condition": "benefit_download_medium",
+          "need_vip": true,
+          "need_purchase": false
+         }
+        },
+        "higher": {
+         "play_detail": {
+          "condition": "benefit_play_higher",
+          "need_vip": false,
+          "need_purchase": false
+         },
+         "download_detail": {
+          "condition": "benefit_download_higher",
+          "need_vip": true,
+          "need_purchase": false
+         }
+        },
+        "highest": {
+         "play_detail": {
+          "condition": "benefit_play_highest",
+          "need_vip": false,
+          "need_purchase": false
+         },
+         "download_detail": {
+          "condition": "benefit_download_highest",
+          "need_vip": true,
+          "need_purchase": false
+         }
+        }
+       }
+      },
+      "bit_rates": [
+       {
+        "br": 68253,
+        "size": 1282358,
+        "quality": "medium"
+       },
+       {
+        "br": 132241,
+        "size": 2484586,
+        "quality": "higher"
+       },
+       {
+        "br": 260297,
+        "size": 4890541,
+        "quality": "highest"
+       }
+      ],
+      "audition_info": {
+       "vid": "v02ad6g10000daad0m7og65oei81ver0",
+       "start_time_ms": 43200,
+       "duration_ms": 60047
+      },
+      "recommend_content_source": "empty",
+      "song_maker_team": {
+       "composers": [
+        {
+         "name": "林子沐"
+        }
+       ],
+       "lyricists": [
+        {
+         "name": "林子沐"
+        }
+       ]
+      },
+      "media_type": "track",
+      "colors": {
+       "cover_gradient_effect_color": [
+        {
+         "rgb": "384347"
+        },
+        {
+         "rgb": "161b1d"
+        }
+       ],
+       "normal_lyric_color": {
+        "rgb": "919ca0"
+       },
+       "playing_lyric_color": {
+        "rgb": "ebf6fa"
+       },
+       "recommend_reason_background_color": {
+        "rgb": "15191b",
+        "alpha": "8c"
+       },
+       "featured_comment_tag_color": {
+        "rgb": "a0a8ab"
+       },
+       "background_color": {
+        "rgb": "161b1d"
+       },
+       "playing_wave_color": {
+        "rgb": "73848c"
+       },
+       "paused_wave_color": {
+        "rgb": "6a7072",
+        "alpha": "bf"
+       },
+       "comment_share_additional_color": {
+        "rgb": "161b1d"
+       },
+       "base_colors": [
+        {
+         "rgb": "eff4f6"
+        },
+        {
+         "rgb": "bdc9cf"
+        },
+        {
+         "rgb": "8e9ea4"
+        },
+        {
+         "rgb": "627177"
+        },
+        {
+         "rgb": "384347"
+        },
+        {
+         "rgb": "30393d"
+        },
+        {
+         "rgb": "272f32"
+        },
+        {
+         "rgb": "1e2528"
+        },
+        {
+         "rgb": "161b1d"
+        }
+       ],
+       "non_interactive_anchor_background": {
+        "rgb": "2d363a",
+        "alpha": "8c"
+       }
+      },
+      "limited_free_info": {
+       "queue_types": [],
+       "expire_time": 0,
+       "sign": "",
+       "sign_version": "",
+       "limited_free_type": "",
+       "rewind_prev_intercept_type": "",
+       "intercept_type": ""
+      },
+      "vocal": 1,
+      "lang_codes": [
+       "ZH"
+      ],
+      "first_vocal": {
+       "duration": 4992,
+       "start": 0
+      },
+      "sharable_platforms": [
+       "link",
+       "aweme",
+       "aweme_publish",
+       "wechat_zone",
+       "wechat",
+       "weibo",
+       "qq_zone",
+       "qq"
+      ],
+      "playable_range": {
+       "duration": 38784,
+       "start": 43200
+      },
+      "sim_id_v3": 53986675714,
+      "plug_status": {
+       "can_plug": false,
+       "is_plugged": false
+      },
+      "tags": [
+       {
+        "category": {
+         "tag_id": 1,
+         "tag_name": "Genre"
+        },
+        "first_level_tag": {
+         "tag_id": 6730932201380171000,
+         "tag_name": "Pop"
+        },
+        "second_level_tag": {
+         "tag_id": 6826166022211373000,
+         "tag_name": "Chinese Pop"
+        }
+       },
+       {
+        "category": {
+         "tag_id": 1,
+         "tag_name": "Genre"
+        },
+        "first_level_tag": {
+         "tag_id": 6730932201380171000,
+         "tag_name": "Pop"
+        }
+       }
+      ],
+      "is_support_bell": true,
+      "check_context": "{\"version\":\"1791875890-2889715066916733949-bit_rates\",\"req_time\":1793745299}",
+      "karaoke": {
+       "supported": true
+      },
+      "lyric_poster": {
+       "disabled": false
+      }
+     },
+     "limited_free_info": {
+      "queue_types": null,
+      "limited_free": false,
+      "expire_time": 1793918099,
+      "sign": "1fcea04da2325d4d8f90e4869e5ff340",
+      "sign_version": "2.0",
+      "limited_free_type": "ad_vip_song_guide_new",
+      "config": {
+       "superior_full_screen_popup": {
+        "intercept_type": "ads"
+       },
+       "preview_popup": {
+        "intercept_type": "ads"
+       },
+       "background_to_front_popup": {
+        "intercept_type": "ads"
+       }
+      },
+      "rewind_prev_intercept_type": "",
+      "intercept_type": "ads",
+      "track_value": ""
+     }
+    }
+   },
+   "card_context": {},
+   "predict_info": {}
+  },
+  {
+   "id": "7701995496365361195",
+   "type": "track",
+   "entity": {
+    "track_wrapper": {
+     "track": {
+      "id": "7701995496365361195",
+      "album": {
+       "id": "7701995496365328427",
+       "name": "爱我吧 恨我吧",
+       "release_date": 1793232002,
+       "url_cover": {
+        "uri": "tos-cn-v-2774c002/o4rAMmFfDEZIfKWmyClIa4EAAi1MAE8HP8fMQe",
+        "urls": [
+         "https://p3-luna.douyinpic.com/img/",
+         "https://p6-luna.douyinpic.com/img/"
+        ],
+        "template_prefix": "tplv-b829550vbb"
+       },
+       "url_player_bg": {
+        "uri": "tos-cn-v-2774c002/o4rAMmFfDEZIfKWmyClIa4EAAi1MAE8HP8fMQe",
+        "urls": [
+         "https://p3-luna.douyinpic.com/img/",
+         "https://p6-luna.douyinpic.com/img/"
+        ],
+        "template": "background:${width}:${height}:30:90:0",
+        "template_prefix": "tplv-b829550vbb"
+       },
+       "cover_gradient_effect_color": [
+        {
+         "rgb": "47393b"
+        },
+        {
+         "rgb": "1d1617"
+        }
+       ],
+       "playing_wave_color": null,
+       "paused_wave_color": null
+      },
+      "artists": [
+       {
+        "id": "7670459681434617919",
+        "name": "呆呆梨",
+        "url_avatar": {
+         "uri": "tos-cn-v-2774c002/ow8y0ijIAn2QLwQBEHaiWSIcEA2AHDQB9Avrt",
+         "urls": [
+          "https://p3-luna.douyinpic.com/img/",
+          "https://p6-luna.douyinpic.com/img/"
+         ],
+         "template_prefix": "tplv-b829550vbb"
+        },
+        "state": {
+         "blocked_by_me": false
+        },
+        "user_info": {
+         "id": "2333635855783460",
+         "nickname": "呆呆梨",
+         "medium_avatar_url": {
+          "uri": "aweme-avatar/tos-cn-avt-0015_8c7eac2d6b8cf1925fbd0cd0517386bf",
+          "urls": [
+           "https://p3.douyinpic.com/aweme/720x720/aweme-avatar/tos-cn-avt-0015_8c7eac2d6b8cf1925fbd0cd0517386bf.jpeg?from=3782654143",
+           "https://p11.douyinpic.com/aweme/720x720/aweme-avatar/tos-cn-avt-0015_8c7eac2d6b8cf1925fbd0cd0517386bf.jpeg?from=3782654143",
+           "https://p26.douyinpic.com/aweme/720x720/aweme-avatar/tos-cn-avt-0015_8c7eac2d6b8cf1925fbd0cd0517386bf.jpeg?from=3782654143"
+          ],
+          "need_complete_url": true
+         },
+         "thumb_avatar_url": {
+          "uri": "aweme-avatar/tos-cn-avt-0015_8c7eac2d6b8cf1925fbd0cd0517386bf",
+          "urls": [
+           "https://p11.douyinpic.com/aweme/100x100/aweme-avatar/tos-cn-avt-0015_8c7eac2d6b8cf1925fbd0cd0517386bf.jpeg?from=3782654143",
+           "https://p3.douyinpic.com/aweme/100x100/aweme-avatar/tos-cn-avt-0015_8c7eac2d6b8cf1925fbd0cd0517386bf.jpeg?from=3782654143",
+           "https://p26.douyinpic.com/aweme/100x100/aweme-avatar/tos-cn-avt-0015_8c7eac2d6b8cf1925fbd0cd0517386bf.jpeg?from=3782654143"
+          ],
+          "need_complete_url": true
+         },
+         "artist_id": "7670459681434617919",
+         "secret": false,
+         "test_tag": 0,
+         "vip_stage": "",
+         "is_vip": false,
+         "is_luna_user": true
+        },
+        "simple_display_name": "呆呆梨",
+        "user_artist_type": 2
+       }
+      ],
+      "duration": 214056,
+      "name": "爱我吧 恨我吧",
+      "preview": {},
+      "state": {},
+      "stats": {
+       "count_collected": 158,
+       "count_comment": 1,
+       "count_shared": 4
+      },
+      "vid": "v02ad6g10000dbhfusvog65jqqd0k35g",
+      "label_info": {
+       "only_vip_download": true,
+       "quality_only_vip_can_download": [
+        "medium",
+        "higher",
+        "highest",
+        "lossless"
+       ],
+       "quality_only_vip_can_play": [
+        "lossless"
+       ],
+       "quality_map": {
+        "highest": {
+         "play_detail": {
+          "condition": "benefit_play_highest",
+          "need_vip": false,
+          "need_purchase": false
+         },
+         "download_detail": {
+          "condition": "benefit_download_highest",
+          "need_vip": true,
+          "need_purchase": false
+         }
+        },
+        "lossless": {
+         "play_detail": {
+          "condition": "benefit_play_lossless",
+          "need_vip": true,
+          "need_purchase": false
+         },
+         "download_detail": {
+          "condition": "benefit_download_lossless",
+          "need_vip": true,
+          "need_purchase": false
+         }
+        },
+        "spatial": {
+         "play_detail": {
+          "condition": "benefit_play_spatial",
+          "need_vip": true,
+          "need_purchase": false
+         },
+         "download_detail": {
+          "condition": "benefit_download_spatial",
+          "need_vip": true,
+          "need_purchase": false
+         }
+        },
+        "hi_res": {
+         "play_detail": {
+          "condition": "benefit_play_hi_res",
+          "need_vip": true,
+          "need_purchase": false
+         },
+         "download_detail": null
+        },
+        "medium": {
+         "play_detail": {
+          "condition": "benefit_play_medium",
+          "need_vip": false,
+          "need_purchase": false
+         },
+         "download_detail": {
+          "condition": "benefit_download_medium",
+          "need_vip": true,
+          "need_purchase": false
+         }
+        },
+        "higher": {
+         "play_detail": {
+          "condition": "benefit_play_higher",
+          "need_vip": false,
+          "need_purchase": false
+         },
+         "download_detail": {
+          "condition": "benefit_download_higher",
+          "need_vip": true,
+          "need_purchase": false
+         }
+        }
+       }
+      },
+      "sim_id": 7702001382786697000,
+      "bit_rates": [
+       {
+        "br": 68215,
+        "size": 1824882,
+        "quality": "medium"
+       },
+       {
+        "br": 132222,
+        "size": 3537161,
+        "quality": "higher"
+       },
+       {
+        "br": 260233,
+        "size": 6961674,
+        "quality": "highest"
+       }
+      ],
+      "audition_info": {},
+      "recommend_content_source": "empty",
+      "song_maker_team": {
+       "composers": [
+        {
+         "name": "呆呆梨"
+        }
+       ],
+       "lyricists": [
+        {
+         "name": "呆呆梨"
+        }
+       ]
+      },
+      "media_type": "track",
+      "colors": {
+       "cover_gradient_effect_color": [
+        {
+         "rgb": "47393b"
+        },
+        {
+         "rgb": "1d1617"
+        }
+       ],
+       "normal_lyric_color": {
+        "rgb": "a09294"
+       },
+       "playing_lyric_color": {
+        "rgb": "f9ebed"
+       },
+       "recommend_reason_background_color": {
+        "rgb": "1b1516",
+        "alpha": "8c"
+       },
+       "featured_comment_tag_color": {
+        "rgb": "aba0a2"
+       },
+       "background_color": {
+        "rgb": "1d1617"
+       },
+       "playing_wave_color": {
+        "rgb": "8d7277"
+       },
+       "paused_wave_color": {
+        "rgb": "73696b",
+        "alpha": "bf"
+       },
+       "comment_share_additional_color": {
+        "rgb": "1d1617"
+       },
+       "base_colors": [
+        {
+         "rgb": "f6eff0"
+        },
+        {
+         "rgb": "cebdc0"
+        },
+        {
+         "rgb": "a48e92"
+        },
+        {
+         "rgb": "776266"
+        },
+        {
+         "rgb": "47393b"
+        },
+        {
+         "rgb": "3c3032"
+        },
+        {
+         "rgb": "322729"
+        },
+        {
+         "rgb": "271f20"
+        },
+        {
+         "rgb": "1d1617"
+        }
+       ],
+       "non_interactive_anchor_background": {
+        "rgb": "3a2e30",
+        "alpha": "8c"
+       }
+      },
+      "limited_free_info": null,
+      "vocal": 1,
+      "lang_codes": [
+       "ZH"
+      ],
+      "sharable_platforms": [
+       "link",
+       "aweme",
+       "aweme_publish",
+       "wechat_zone",
+       "wechat",
+       "weibo",
+       "qq_zone",
+       "qq"
+      ],
+      "playable_range": {
+       "duration": 0,
+       "start": 0
+      },
+      "sim_id_v3": 450856674050,
+      "plug_status": {
+       "can_plug": false,
+       "is_plugged": false
+      },
+      "tags": [
+       {
+        "category": {
+         "tag_id": 1,
+         "tag_name": "Genre"
+        },
+        "first_level_tag": {
+         "tag_id": 6730932201380171000,
+         "tag_name": "Pop"
+        }
+       },
+       {
+        "category": {
+         "tag_id": 1,
+         "tag_name": "Genre"
+        },
+        "first_level_tag": {
+         "tag_id": 6730932201380171000,
+         "tag_name": "Pop"
+        },
+        "second_level_tag": {
+         "tag_id": 6826166022211373000,
+         "tag_name": "Chinese Pop"
+        }
+       }
+      ],
+      "fragments": [
+       {
+        "type": "mute_tail",
+        "start_time": 212960,
+        "end_time": 214020
+       }
+      ],
+      "is_support_bell": true,
+      "check_context": "{\"version\":\"1793738834-6144243932554005231-tag_ids\",\"req_time\":1793745299}",
+      "karaoke": {
+       "supported": true
+      },
+      "lyric_poster": {
+       "disabled": false
+      }
+     },
+     "limited_free_info": {
+      "queue_types": null,
+      "limited_free": false,
+      "expire_time": 1793918099,
+      "sign": "b536b9aa99846d7ae35b143cf03c00ab",
+      "sign_version": "2.0",
+      "limited_free_type": "sell",
+      "rewind_prev_intercept_type": "",
+      "intercept_type": "",
+      "track_value": ""
+     }
+    }
+   },
+   "card_context": {},
+   "predict_info": {}
+  }
+ ]
+}

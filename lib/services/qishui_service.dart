@@ -147,12 +147,31 @@ class QishuiService {
   }
 
   /// 电台曲目（一次取 30 首；响应无 cursor 字段，不做假分页）
-  Future<List<Track>> radioTracks(String radioId) async {
+  Future<List<Track>> radioTracks(String radioId) => radioTracksPage(radioId, '0');
+
+  /// 电台曲目分页：实测（2026-11-04）服务端每批固定回 6 首、has_more 恒 true、
+  /// 无 next_cursor；cursor 传已取条数（offset）可继续取到后续批次，
+  /// 但单电台池子是轮换小池（约 20 首量级后新增明显变少），靠多电台轮换扩容。
+  Future<List<Track>> radioTracksPage(String radioId, String cursor) async {
     final body = await _post('/luna/feed/radio/tracks', {
       'radio_id': radioId,
-      'cursor': '0',
+      'cursor': cursor,
       'count': 30,
     });
+    return parseFeedItems(body);
+  }
+
+  /// 相关歌曲（官方 SearchOneTrackQueueLoader 续队列同款接口）：
+  /// 实测游客可用，每批固定 6 首、has_more 恒 true、无 cursor；
+  /// 种子相关性弱（近似「种子邻域随机池」，单种子邻域约 40–60 首后枯竭），
+  /// 靠链式换种子 + 与歌单/电台多源组合续命。
+  Future<List<Track>> relatedTracks(String seedTrackId) async {
+    final body = await _post('/luna/media/related', {'track_id': seedTrackId});
+    return parseFeedItems(body);
+  }
+
+  /// feed 类响应（items[].entity.track_wrapper.track）统一解析
+  static List<Track> parseFeedItems(Map<String, dynamic> body) {
     final tracks = <Track>[];
     for (final item in (body['items'] as List?) ?? const []) {
       if (item is! Map<String, dynamic>) continue;

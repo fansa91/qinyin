@@ -8,6 +8,7 @@ import 'screens/downloads_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/library_screen.dart';
 import 'screens/player_screen.dart';
+import 'screens/recommend_screen.dart';
 import 'screens/search_screen.dart';
 import 'screens/settings_screen.dart';
 import 'services/download_service.dart';
@@ -119,10 +120,11 @@ class AppShell extends StatefulWidget {
 }
 
 class _AppShellState extends State<AppShell> {
-  int _currentIndex = 0; // 0 首页 1 下载 2 我的
+  int _currentIndex = 0; // 0 首页 1 推荐 2 下载 3 我的
 
   List<Widget> get _pages => const [
         HomeScreen(),
+        RecommendScreen(),
         DownloadsScreen(),
         LibraryScreen(),
       ];
@@ -161,6 +163,11 @@ class _AppShellState extends State<AppShell> {
             label: '首页',
           ),
           NavigationDestination(
+            icon: Icon(Icons.recommend_outlined),
+            selectedIcon: Icon(Icons.recommend),
+            label: '推荐',
+          ),
+          NavigationDestination(
             icon: Icon(Icons.download_outlined),
             selectedIcon: Icon(Icons.download),
             label: '下载',
@@ -194,6 +201,9 @@ class _AppShellState extends State<AppShell> {
                   destinations: const [
                     NavigationRailDestination(
                         icon: Icon(Icons.home_outlined), label: Text('首页')),
+                    NavigationRailDestination(
+                        icon: Icon(Icons.recommend_outlined),
+                        label: Text('推荐')),
                     NavigationRailDestination(
                         icon: Icon(Icons.download_outlined),
                         label: Text('下载')),
@@ -247,13 +257,13 @@ class _AppShellState extends State<AppShell> {
                       _SideItem(
                         icon: Icons.recommend_outlined,
                         label: '推荐',
-                        selected: _currentIndex == 0,
-                        onTap: () => setState(() => _currentIndex = 0),
+                        selected: _currentIndex == 1,
+                        onTap: () => setState(() => _currentIndex = 1),
                       ),
                       _SideItem(
                         icon: Icons.explore_outlined,
                         label: '发现',
-                        selected: false,
+                        selected: _currentIndex == 0,
                         onTap: () => setState(() => _currentIndex = 0),
                       ),
                       const _SideHeader('我的音乐'),
@@ -282,8 +292,8 @@ class _AppShellState extends State<AppShell> {
                       _SideItem(
                         icon: Icons.download_outlined,
                         label: '下载管理',
-                        selected: _currentIndex == 1,
-                        onTap: () => setState(() => _currentIndex = 1),
+                        selected: _currentIndex == 2,
+                        onTap: () => setState(() => _currentIndex = 2),
                       ),
                       const _SideHeader('创建的歌单'),
                       for (final p in library.myPlaylists)

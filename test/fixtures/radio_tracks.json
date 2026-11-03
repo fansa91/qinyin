@@ -1,0 +1,1192 @@
+{
+ "has_more": true,
+ "items": [
+  {
+   "id": "7075451412628408321",
+   "type": "track",
+   "entity": {
+    "track_wrapper": {
+     "track": {
+      "id": "7075451412628408321",
+      "album": {
+       "id": "7075451412427065346",
+       "name": "Ханшайым",
+       "release_date": 1647302400,
+       "url_cover": {
+        "uri": "tos-cn-v-2774c002/oQpAQiknsBbEACFZtBBEfKyAA5t4gZfDaSBDET",
+        "urls": [
+         "https://p3-luna.douyinpic.com/img/",
+         "https://p6-luna.douyinpic.com/img/"
+        ],
+        "template_prefix": "tplv-b829550vbb"
+       },
+       "url_player_bg": {
+        "uri": "tos-cn-v-2774c002/oQpAQiknsBbEACFZtBBEfKyAA5t4gZfDaSBDET",
+        "urls": [
+         "https://p3-luna.douyinpic.com/img/",
+         "https://p6-luna.douyinpic.com/img/"
+        ],
+        "template": "background:${width}:${height}:30:90:0",
+        "template_prefix": "tplv-b829550vbb"
+       },
+       "cover_gradient_effect_color": [
+        {
+         "rgb": "716865"
+        },
+        {
+         "rgb": "494340"
+        }
+       ],
+       "playing_wave_color": null,
+       "paused_wave_color": null
+      },
+      "artists": [
+       {
+        "id": "7031759804172273696",
+        "name": "Есен Жүсіпов",
+        "url_avatar": {
+         "uri": "tos-cn-v-2774c002/407ab6e64f2f47ce98042d710dabe602",
+         "urls": [
+          "https://p3-luna.douyinpic.com/img/",
+          "https://p6-luna.douyinpic.com/img/"
+         ],
+         "template_prefix": "tplv-b829550vbb"
+        },
+        "state": {
+         "blocked_by_me": false
+        },
+        "simple_display_name": "Есен Жүсіпов",
+        "user_artist_type": 1
+       },
+       {
+        "id": "6578017024486676488",
+        "name": "Төреғали Төреәлі",
+        "url_avatar": {
+         "uri": "tos-cn-v-2774c002/01f437cddfc149c1899ed422551829ab",
+         "urls": [
+          "https://p3-luna.douyinpic.com/img/",
+          "https://p6-luna.douyinpic.com/img/"
+         ],
+         "template_prefix": "tplv-b829550vbb"
+        },
+        "state": {
+         "blocked_by_me": false
+        },
+        "simple_display_name": "Төреғали Төреәлі",
+        "user_artist_type": 1
+       }
+      ],
+      "duration": 194032,
+      "name": "Ханшайым",
+      "preview": {
+       "duration": 30001,
+       "start": 41472,
+       "vid": "v03ad6g10000cbd1d03c77ubmng6rhs0",
+       "bit_rates": [
+        {
+         "br": 68609,
+         "size": 257689,
+         "quality": "medium"
+        },
+        {
+         "br": 132552,
+         "size": 497850,
+         "quality": "higher"
+        }
+       ]
+      },
+      "state": {},
+      "stats": {
+       "count_collected": 883,
+       "count_comment": 7,
+       "count_shared": 40
+      },
+      "vid": "v10ad6g50000d76f3dfog65vstg3mefg",
+      "label_info": {
+       "only_vip_download": true,
+       "only_vip_playable": true,
+       "quality_only_vip_can_download": [
+        "medium",
+        "higher",
+        "highest",
+        "lossless"
+       ],
+       "quality_only_vip_can_play": [
+        "lossless"
+       ],
+       "is_original": true,
+       "quality_map": {
+        "medium": {
+         "play_detail": {
+          "condition": "benefit_play_medium",
+          "need_vip": false,
+          "need_purchase": false
+         },
+         "download_detail": {
+          "condition": "benefit_download_medium",
+          "need_vip": true,
+          "need_purchase": false
+         }
+        },
+        "higher": {
+         "play_detail": {
+          "condition": "benefit_play_higher",
+          "need_vip": false,
+          "need_purchase": false
+         },
+         "download_detail": {
+          "condition": "benefit_download_higher",
+          "need_vip": true,
+          "need_purchase": false
+         }
+        },
+        "highest": {
+         "play_detail": {
+          "condition": "benefit_play_highest",
+          "need_vip": false,
+          "need_purchase": false
+         },
+         "download_detail": {
+          "condition": "benefit_download_highest",
+          "need_vip": true,
+          "need_purchase": false
+         }
+        },
+        "lossless": {
+         "play_detail": {
+          "condition": "benefit_play_lossless",
+          "need_vip": true,
+          "need_purchase": false
+         },
+         "download_detail": {
+          "condition": "benefit_download_lossless",
+          "need_vip": true,
+          "need_purchase": false
+         }
+        },
+        "spatial": {
+         "play_detail": {
+          "condition": "benefit_play_spatial",
+          "need_vip": true,
+          "need_purchase": false
+         },
+         "download_detail": {
+          "condition": "benefit_download_spatial",
+          "need_vip": true,
+          "need_purchase": false
+         }
+        },
+        "hi_res": {
+         "play_detail": {
+          "condition": "benefit_play_hi_res",
+          "need_vip": true,
+          "need_purchase": false
+         },
+         "download_detail": null
+        }
+       }
+      },
+      "sim_id": 7075452730671630000,
+      "bit_rates": [
+       {
+        "br": 68224,
+        "size": 1654715,
+        "quality": "medium"
+       },
+       {
+        "br": 132215,
+        "size": 3206753,
+        "quality": "higher"
+       },
+       {
+        "br": 260258,
+        "size": 6312319,
+        "quality": "highest"
+       }
+      ],
+      "audition_info": {
+       "vid": "v03ad6g10000cbd1d03c77ubmng6rhs0",
+       "start_time_ms": 41472,
+       "duration_ms": 30001
+      },
+      "recommend_content_source": "empty",
+      "song_maker_team": {},
+      "media_type": "track",
+      "chorus": {
+       "duration": 0,
+       "start": 41472
+      },
+      "colors": {
+       "cover_gradient_effect_color": [
+        {
+         "rgb": "716865"
+        },
+        {
+         "rgb": "494340"
+        }
+       ],
+       "normal_lyric_color": {
+        "rgb": "b5aca9"
+       },
+       "playing_lyric_color": {
+        "rgb": "f8efec"
+       },
+       "recommend_reason_background_color": {
+        "rgb": "3e3a37",
+        "alpha": "8c"
+       },
+       "featured_comment_tag_color": {
+        "rgb": "ada39f"
+       },
+       "background_color": {
+        "rgb": "494340"
+       },
+       "playing_wave_color": {
+        "rgb": "867d79"
+       },
+       "paused_wave_color": {
+        "rgb": "706d6c",
+        "alpha": "bf"
+       },
+       "comment_share_additional_color": {
+        "rgb": "494340"
+       },
+       "base_colors": [
+        {
+         "rgb": "f4f1f0"
+        },
+        {
+         "rgb": "d5cfcc"
+        },
+        {
+         "rgb": "b4aca9"
+        },
+        {
+         "rgb": "938a86"
+        },
+        {
+         "rgb": "716865"
+        },
+        {
+         "rgb": "5c5451"
+        },
+        {
+         "rgb": "46403e"
+        },
+        {
+         "rgb": "312d2b"
+        },
+        {
+         "rgb": "1b1918"
+        }
+       ],
+       "non_interactive_anchor_background": {
+        "rgb": "5c5552",
+        "alpha": "8c"
+       }
+      },
+      "limited_free_info": {
+       "queue_types": [],
+       "expire_time": 0,
+       "sign": "",
+       "sign_version": "",
+       "limited_free_type": "",
+       "rewind_prev_intercept_type": "",
+       "intercept_type": ""
+      },
+      "vocal": 1,
+      "lang_codes": [
+       "TR"
+      ],
+      "first_vocal": {
+       "duration": 20736,
+       "start": 20736
+      },
+      "sharable_platforms": [
+       "link",
+       "aweme",
+       "aweme_publish",
+       "wechat_zone",
+       "wechat",
+       "weibo",
+       "qq_zone",
+       "qq"
+      ],
+      "playable_range": {
+       "duration": 20543,
+       "start": 41472
+      },
+      "sim_id_v3": 37659698946,
+      "plug_status": {
+       "can_plug": false,
+       "is_plugged": false
+      },
+      "tags": [
+       {
+        "category": {
+         "tag_id": 1,
+         "tag_name": "Genre"
+        },
+        "first_level_tag": {
+         "tag_id": 6730932201380171000,
+         "tag_name": "Pop"
+        }
+       }
+      ],
+      "fragments": [
+       {
+        "type": "mute_tail",
+        "start_time": 190820,
+        "end_time": 194050
+       }
+      ],
+      "nodes": [
+       {
+        "type": 1,
+        "start": 20736,
+        "duration": 20736,
+        "priority": 2,
+        "opacity": 0.5
+       },
+       {
+        "type": 2,
+        "start": 41472,
+        "duration": 0,
+        "priority": 1,
+        "opacity": 1
+       }
+      ],
+      "is_support_bell": true,
+      "check_context": "{\"req_time\":1793745301}",
+      "karaoke": {
+       "supported": true
+      },
+      "lyric_poster": {
+       "disabled": false
+      }
+     },
+     "limited_free_info": {
+      "queue_types": null,
+      "limited_free": false,
+      "expire_time": 1793918101,
+      "sign": "b7d145fc7d5b10a802f0c7725a3a5c1c",
+      "sign_version": "2.0",
+      "limited_free_type": "ad_vip_song_guide_new",
+      "config": {
+       "preview_popup": {
+        "intercept_type": "ads"
+       },
+       "background_to_front_popup": {
+        "intercept_type": "ads"
+       },
+       "superior_full_screen_popup": {
+        "intercept_type": "ads"
+       }
+      },
+      "rewind_prev_intercept_type": "",
+      "intercept_type": "ads",
+      "track_value": ""
+     }
+    }
+   },
+   "card_context": {},
+   "predict_info": {}
+  },
+  {
+   "id": "7509329737475852305",
+   "type": "track",
+   "entity": {
+    "track_wrapper": {
+     "track": {
+      "id": "7509329737475852305",
+      "album": {
+       "id": "7509329736847886337",
+       "name": "Deadman",
+       "release_date": 1748361600,
+       "url_cover": {
+        "uri": "tos-cn-v-2774c002/o84BkRD5IFFeIgCbcAEgAfaADqPHfzOsQP7BA9",
+        "urls": [
+         "https://p3-luna.douyinpic.com/img/",
+         "https://p6-luna.douyinpic.com/img/"
+        ],
+        "template_prefix": "tplv-b829550vbb"
+       },
+       "url_player_bg": {
+        "uri": "tos-cn-v-2774c002/o84BkRD5IFFeIgCbcAEgAfaADqPHfzOsQP7BA9",
+        "urls": [
+         "https://p3-luna.douyinpic.com/img/",
+         "https://p6-luna.douyinpic.com/img/"
+        ],
+        "template": "background:${width}:${height}:30:90:0",
+        "template_prefix": "tplv-b829550vbb"
+       },
+       "cover_gradient_effect_color": [
+        {
+         "rgb": "3d4240"
+        },
+        {
+         "rgb": "181b1a"
+        }
+       ],
+       "playing_wave_color": null,
+       "paused_wave_color": null
+      },
+      "artists": [
+       {
+        "id": "6803535152497559553",
+        "name": "蔡徐坤",
+        "url_avatar": {
+         "uri": "tos-cn-v-2774c002/f0963fc857d941298ef9e1b8937a2cf8",
+         "urls": [
+          "https://p3-luna.douyinpic.com/img/",
+          "https://p6-luna.douyinpic.com/img/"
+         ],
+         "template_prefix": "tplv-b829550vbb"
+        },
+        "state": {
+         "blocked_by_me": false
+        },
+        "user_info": {
+         "id": "103313639528",
+         "nickname": "蔡徐坤",
+         "medium_avatar_url": {
+          "uri": "aweme-avatar/tos-cn-avt-0015_32bbe841c6a8d08d01fced16fd50ec05",
+          "urls": [
+           "https://p3.huoshanimg.com/aweme/720x720/aweme-avatar/tos-cn-avt-0015_32bbe841c6a8d08d01fced16fd50ec05.jpeg?from=3782654143",
+           "https://p9.huoshanimg.com/aweme/720x720/aweme-avatar/tos-cn-avt-0015_32bbe841c6a8d08d01fced16fd50ec05.jpeg?from=3782654143"
+          ],
+          "need_complete_url": true
+         },
+         "thumb_avatar_url": {
+          "uri": "aweme-avatar/tos-cn-avt-0015_32bbe841c6a8d08d01fced16fd50ec05",
+          "urls": [
+           "https://p11.douyinpic.com/aweme/100x100/aweme-avatar/tos-cn-avt-0015_32bbe841c6a8d08d01fced16fd50ec05.jpeg?from=3782654143",
+           "https://p26.douyinpic.com/aweme/100x100/aweme-avatar/tos-cn-avt-0015_32bbe841c6a8d08d01fced16fd50ec05.jpeg?from=3782654143",
+           "https://p3.douyinpic.com/aweme/100x100/aweme-avatar/tos-cn-avt-0015_32bbe841c6a8d08d01fced16fd50ec05.jpeg?from=3782654143"
+          ],
+          "need_complete_url": true
+         },
+         "artist_id": "6803535152497559553",
+         "secret": false,
+         "test_tag": 0,
+         "vip_stage": "",
+         "is_vip": false,
+         "is_luna_user": false
+        },
+        "simple_display_name": "蔡徐坤",
+        "user_artist_type": 2
+       }
+      ],
+      "duration": 235787,
+      "name": "Deadman",
+      "preview": {
+       "duration": 60001,
+       "start": 65664,
+       "vid": "v10ad6g50000d6mdcq7og65m8ulbefpg",
+       "bit_rates": [
+        {
+         "br": 132428,
+         "size": 993216,
+         "quality": "higher"
+        }
+       ]
+      },
+      "state": {},
+      "stats": {
+       "count_collected": 7957199,
+       "count_comment": 277017,
+       "count_shared": 415905
+      },
+      "vid": "v10ad6g50000d0r7vdfog65imshhp7ag",
+      "label_info": {
+       "only_vip_download": true,
+       "only_vip_playable": true,
+       "quality_only_vip_can_download": [
+        "medium",
+        "higher",
+        "highest",
+        "lossless"
+       ],
+       "quality_only_vip_can_play": [
+        "lossless"
+       ],
+       "is_original": true,
+       "quality_map": {
+        "higher": {
+         "play_detail": {
+          "condition": "benefit_play_higher",
+          "need_vip": false,
+          "need_purchase": false
+         },
+         "download_detail": {
+          "condition": "benefit_download_higher",
+          "need_vip": true,
+          "need_purchase": false
+         }
+        },
+        "highest": {
+         "play_detail": {
+          "condition": "benefit_play_highest",
+          "need_vip": false,
+          "need_purchase": false
+         },
+         "download_detail": {
+          "condition": "benefit_download_highest",
+          "need_vip": true,
+          "need_purchase": false
+         }
+        },
+        "lossless": {
+         "play_detail": {
+          "condition": "benefit_play_lossless",
+          "need_vip": true,
+          "need_purchase": false
+         },
+         "download_detail": {
+          "condition": "benefit_download_lossless",
+          "need_vip": true,
+          "need_purchase": false
+         }
+        },
+        "spatial": {
+         "play_detail": {
+          "condition": "benefit_play_spatial",
+          "need_vip": true,
+          "need_purchase": false
+         },
+         "download_detail": {
+          "condition": "benefit_download_spatial",
+          "need_vip": true,
+          "need_purchase": false
+         }
+        },
+        "hi_res": {
+         "play_detail": {
+          "condition": "benefit_play_hi_res",
+          "need_vip": true,
+          "need_purchase": false
+         },
+         "download_detail": null
+        },
+        "medium": {
+         "play_detail": {
+          "condition": "benefit_play_medium",
+          "need_vip": false,
+          "need_purchase": false
+         },
+         "download_detail": {
+          "condition": "benefit_download_medium",
+          "need_vip": true,
+          "need_purchase": false
+         }
+        }
+       }
+      },
+      "sim_id": 7678712683186162000,
+      "bit_rates": [
+       {
+        "br": 66133,
+        "size": 1949179,
+        "quality": "medium"
+       },
+       {
+        "br": 132197,
+        "size": 3896325,
+        "quality": "higher"
+       },
+       {
+        "br": 260229,
+        "size": 7669886,
+        "quality": "highest"
+       }
+      ],
+      "audition_info": {
+       "vid": "v10ad6g50000d6mdcq7og65m8ulbefpg",
+       "start_time_ms": 65664,
+       "duration_ms": 60001
+      },
+      "recommend_content_source": "featured_comment_alta",
+      "song_maker_team": {
+       "composers": [
+        {
+         "name": "蔡徐坤 、Jacob Ray、Mark Mckenna 、Kurtis Wells、Fussy、Jonathan Cunningham"
+        }
+       ],
+       "lyricists": [
+        {
+         "name": "蔡徐坤 、Jacob Ray、Mark Mckenna 、Kurtis Wells、Fussy、Jonathan Cunningham"
+        }
+       ]
+      },
+      "media_type": "track",
+      "chorus": {
+       "duration": 0,
+       "start": 65664
+      },
+      "colors": {
+       "cover_gradient_effect_color": [
+        {
+         "rgb": "3d4240"
+        },
+        {
+         "rgb": "181b1a"
+        }
+       ],
+       "normal_lyric_color": {
+        "rgb": "969b99"
+       },
+       "playing_lyric_color": {
+        "rgb": "f0f5f3"
+       },
+       "recommend_reason_background_color": {
+        "rgb": "161918",
+        "alpha": "8c"
+       },
+       "featured_comment_tag_color": {
+        "rgb": "a3a8a7"
+       },
+       "background_color": {
+        "rgb": "181b1a"
+       },
+       "playing_wave_color": {
+        "rgb": "7a8580"
+       },
+       "paused_wave_color": {
+        "rgb": "6c706e",
+        "alpha": "bf"
+       },
+       "comment_share_additional_color": {
+        "rgb": "181b1a"
+       },
+       "base_colors": [
+        {
+         "rgb": "f1f4f2"
+        },
+        {
+         "rgb": "c2c9c6"
+        },
+        {
+         "rgb": "959d99"
+        },
+        {
+         "rgb": "69706c"
+        },
+        {
+         "rgb": "3d4240"
+        },
+        {
+         "rgb": "343936"
+        },
+        {
+         "rgb": "2b2f2d"
+        },
+        {
+         "rgb": "212523"
+        },
+        {
+         "rgb": "181b1a"
+        }
+       ],
+       "non_interactive_anchor_background": {
+        "rgb": "313534",
+        "alpha": "8c"
+       }
+      },
+      "limited_free_info": {
+       "queue_types": [],
+       "expire_time": 0,
+       "sign": "",
+       "sign_version": "",
+       "limited_free_type": "",
+       "rewind_prev_intercept_type": "",
+       "intercept_type": ""
+      },
+      "vocal": 1,
+      "lang_codes": [
+       "EN"
+      ],
+      "first_vocal": {
+       "duration": 48000,
+       "start": 17664
+      },
+      "sharable_platforms": [
+       "link",
+       "aweme",
+       "aweme_publish",
+       "wechat_zone",
+       "wechat",
+       "weibo",
+       "qq_zone",
+       "qq"
+      ],
+      "playable_range": {
+       "duration": 31680,
+       "start": 65664
+      },
+      "sim_id_v3": 236295426306,
+      "plug_status": {
+       "can_plug": false,
+       "is_plugged": false
+      },
+      "tags": [
+       {
+        "category": {
+         "tag_id": 1,
+         "tag_name": "Genre"
+        },
+        "first_level_tag": {
+         "tag_id": 6730932201384316000,
+         "tag_name": "R&B/Soul"
+        }
+       }
+      ],
+      "fragments": [
+       {
+        "type": "mute_tail",
+        "start_time": 232500,
+        "end_time": 235800
+       }
+      ],
+      "nodes": [
+       {
+        "type": 1,
+        "start": 17664,
+        "duration": 48000,
+        "priority": 2,
+        "opacity": 0.5
+       },
+       {
+        "type": 2,
+        "start": 65664,
+        "duration": 0,
+        "priority": 1,
+        "opacity": 1
+       }
+      ],
+      "is_support_bell": true,
+      "check_context": "{\"req_time\":1793745301}",
+      "karaoke": {
+       "supported": true
+      },
+      "lyric_poster": {
+       "disabled": false
+      }
+     },
+     "limited_free_info": {
+      "queue_types": null,
+      "limited_free": false,
+      "expire_time": 1793918101,
+      "sign": "92197c0ae2544ea4299d56e664896b24",
+      "sign_version": "2.0",
+      "limited_free_type": "ad_vip_song_guide_new",
+      "config": {
+       "preview_popup": {
+        "intercept_type": "ads"
+       },
+       "background_to_front_popup": {
+        "intercept_type": "ads"
+       },
+       "superior_full_screen_popup": {
+        "intercept_type": "ads"
+       }
+      },
+      "rewind_prev_intercept_type": "",
+      "intercept_type": "ads",
+      "track_value": ""
+     }
+    }
+   },
+   "card_context": {},
+   "predict_info": {}
+  },
+  {
+   "id": "7696710408020494355",
+   "type": "track",
+   "entity": {
+    "track_wrapper": {
+     "track": {
+      "id": "7696710408020494355",
+      "album": {
+       "id": "7696710408020527123",
+       "name": "我不知为何疯狂对你执着",
+       "release_date": 1791907200,
+       "url_cover": {
+        "uri": "tos-cn-v-2774c002/oMBuCR30DFDAetEAEqEDrGfWEAnYgR5XADQpSZ",
+        "urls": [
+         "https://p3-luna.douyinpic.com/img/",
+         "https://p6-luna.douyinpic.com/img/"
+        ],
+        "template_prefix": "tplv-b829550vbb"
+       },
+       "url_player_bg": {
+        "uri": "tos-cn-v-2774c002/oMBuCR30DFDAetEAEqEDrGfWEAnYgR5XADQpSZ",
+        "urls": [
+         "https://p3-luna.douyinpic.com/img/",
+         "https://p6-luna.douyinpic.com/img/"
+        ],
+        "template": "background:${width}:${height}:30:90:0",
+        "template_prefix": "tplv-b829550vbb"
+       },
+       "cover_gradient_effect_color": [
+        {
+         "rgb": "413f3f"
+        },
+        {
+         "rgb": "1a1919"
+        }
+       ],
+       "playing_wave_color": null,
+       "paused_wave_color": null
+      },
+      "artists": [
+       {
+        "id": "7641091002837141523",
+        "name": "银澈",
+        "url_avatar": {
+         "uri": "tos-cn-v-2774c002/oYt6PQEgCACFAEqoABZtyCffAHDsABAElAdqxK",
+         "urls": [
+          "https://p3-luna.douyinpic.com/img/",
+          "https://p6-luna.douyinpic.com/img/"
+         ],
+         "template_prefix": "tplv-b829550vbb"
+        },
+        "state": {
+         "blocked_by_me": false
+        },
+        "simple_display_name": "银澈",
+        "user_artist_type": 1
+       }
+      ],
+      "duration": 274800,
+      "name": "我不知为何疯狂对你执着",
+      "preview": {
+       "duration": 60047,
+       "start": 65280,
+       "vid": "v02ad6g10000db84i6fog65g4mt7l8t0",
+       "bit_rates": [
+        {
+         "br": 68445,
+         "size": 513341,
+         "quality": "medium"
+        },
+        {
+         "br": 132425,
+         "size": 993188,
+         "quality": "higher"
+        },
+        {
+         "br": 260464,
+         "size": 1953483,
+         "quality": "highest"
+        }
+       ]
+      },
+      "state": {},
+      "stats": {
+       "count_collected": 101350,
+       "count_comment": 190,
+       "count_shared": 2267
+      },
+      "vid": "v03ad6g10000db83clfog65ke5bgplu0",
+      "label_info": {
+       "only_vip_download": true,
+       "only_vip_playable": true,
+       "quality_only_vip_can_download": [
+        "medium",
+        "higher",
+        "highest",
+        "lossless"
+       ],
+       "quality_only_vip_can_play": [
+        "lossless"
+       ],
+       "quality_map": {
+        "spatial": {
+         "play_detail": {
+          "condition": "benefit_play_spatial",
+          "need_vip": true,
+          "need_purchase": false
+         },
+         "download_detail": {
+          "condition": "benefit_download_spatial",
+          "need_vip": true,
+          "need_purchase": false
+         }
+        },
+        "hi_res": {
+         "play_detail": {
+          "condition": "benefit_play_hi_res",
+          "need_vip": true,
+          "need_purchase": false
+         },
+         "download_detail": null
+        },
+        "medium": {
+         "play_detail": {
+          "condition": "benefit_play_medium",
+          "need_vip": false,
+          "need_purchase": false
+         },
+         "download_detail": {
+          "condition": "benefit_download_medium",
+          "need_vip": true,
+          "need_purchase": false
+         }
+        },
+        "higher": {
+         "play_detail": {
+          "condition": "benefit_play_higher",
+          "need_vip": false,
+          "need_purchase": false
+         },
+         "download_detail": {
+          "condition": "benefit_download_higher",
+          "need_vip": true,
+          "need_purchase": false
+         }
+        },
+        "highest": {
+         "play_detail": {
+          "condition": "benefit_play_highest",
+          "need_vip": false,
+          "need_purchase": false
+         },
+         "download_detail": {
+          "condition": "benefit_download_highest",
+          "need_vip": true,
+          "need_purchase": false
+         }
+        },
+        "lossless": {
+         "play_detail": {
+          "condition": "benefit_play_lossless",
+          "need_vip": true,
+          "need_purchase": false
+         },
+         "download_detail": {
+          "condition": "benefit_download_lossless",
+          "need_vip": true,
+          "need_purchase": false
+         }
+        }
+       }
+      },
+      "sim_id": 7582049897646393000,
+      "bit_rates": [
+       {
+        "br": 68196,
+        "size": 2342538,
+        "quality": "medium"
+       },
+       {
+        "br": 132189,
+        "size": 4540695,
+        "quality": "higher"
+       },
+       {
+        "br": 260214,
+        "size": 8938373,
+        "quality": "highest"
+       }
+      ],
+      "audition_info": {
+       "vid": "v02ad6g10000db84i6fog65g4mt7l8t0",
+       "start_time_ms": 65280,
+       "duration_ms": 60047
+      },
+      "recommend_content_source": "empty",
+      "song_maker_team": {
+       "composers": [
+        {
+         "name": "冯思源"
+        }
+       ],
+       "lyricists": [
+        {
+         "name": "冯思源"
+        }
+       ]
+      },
+      "media_type": "track",
+      "chorus": {
+       "duration": 0,
+       "start": 65280
+      },
+      "colors": {
+       "cover_gradient_effect_color": [
+        {
+         "rgb": "413f3f"
+        },
+        {
+         "rgb": "1a1919"
+        }
+       ],
+       "normal_lyric_color": {
+        "rgb": "9a9898"
+       },
+       "playing_lyric_color": {
+        "rgb": "f3f1f1"
+       },
+       "recommend_reason_background_color": {
+        "rgb": "181717",
+        "alpha": "8c"
+       },
+       "featured_comment_tag_color": {
+        "rgb": "a7a5a5"
+       },
+       "background_color": {
+        "rgb": "1a1919"
+       },
+       "playing_wave_color": {
+        "rgb": "827d7d"
+       },
+       "paused_wave_color": {
+        "rgb": "6f6d6d",
+        "alpha": "bf"
+       },
+       "comment_share_additional_color": {
+        "rgb": "1a1919"
+       },
+       "base_colors": [
+        {
+         "rgb": "f3f2f2"
+        },
+        {
+         "rgb": "c7c5c5"
+        },
+        {
+         "rgb": "9a9898"
+        },
+        {
+         "rgb": "6e6b6b"
+        },
+        {
+         "rgb": "413f3f"
+        },
+        {
+         "rgb": "373535"
+        },
+        {
+         "rgb": "2d2c2c"
+        },
+        {
+         "rgb": "242323"
+        },
+        {
+         "rgb": "1a1919"
+        }
+       ],
+       "non_interactive_anchor_background": {
+        "rgb": "353333",
+        "alpha": "8c"
+       }
+      },
+      "limited_free_info": {
+       "queue_types": [],
+       "expire_time": 0,
+       "sign": "",
+       "sign_version": "",
+       "limited_free_type": "",
+       "rewind_prev_intercept_type": "",
+       "intercept_type": ""
+      },
+      "vocal": 1,
+      "lang_codes": [
+       "ZH"
+      ],
+      "first_vocal": {
+       "duration": 51648,
+       "start": 13632
+      },
+      "sharable_platforms": [
+       "link",
+       "aweme",
+       "aweme_publish",
+       "wechat_zone",
+       "wechat",
+       "weibo",
+       "qq_zone",
+       "qq"
+      ],
+      "playable_range": {
+       "duration": 44736,
+       "start": 65280
+      },
+      "sim_id_v3": 373368594178,
+      "plug_status": {
+       "can_plug": false,
+       "is_plugged": false
+      },
+      "tags": [
+       {
+        "category": {
+         "tag_id": 1,
+         "tag_name": "Genre"
+        },
+        "first_level_tag": {
+         "tag_id": 6730932201380171000,
+         "tag_name": "Pop"
+        }
+       },
+       {
+        "category": {
+         "tag_id": 1,
+         "tag_name": "Genre"
+        },
+        "first_level_tag": {
+         "tag_id": 6730932201380171000,
+         "tag_name": "Pop"
+        },
+        "second_level_tag": {
+         "tag_id": 6826166022211373000,
+         "tag_name": "Chinese Pop"
+        }
+       }
+      ],
+      "nodes": [
+       {
+        "type": 2,
+        "start": 65280,
+        "duration": 0,
+        "priority": 1,
+        "opacity": 1
+       }
+      ],
+      "is_support_bell": true,
+      "check_context": "{\"version\":\"1793487117-1649123006701460643-tag_ids\",\"req_time\":1793745301}",
+      "karaoke": {
+       "supported": true
+      },
+      "lyric_poster": {
+       "disabled": false
+      }
+     },
+     "limited_free_info": {
+      "queue_types": null,
+      "limited_free": false,
+      "expire_time": 1793918101,
+      "sign": "e0bff16d20d63006cedc440948419d9f",
+      "sign_version": "2.0",
+      "limited_free_type": "ad_vip_song_guide_new",
+      "config": {
+       "background_to_front_popup": {
+        "intercept_type": "ads"
+       },
+       "superior_full_screen_popup": {
+        "intercept_type": "ads"
+       },
+       "preview_popup": {
+        "intercept_type": "ads"
+       }
+      },
+      "rewind_prev_intercept_type": "",
+      "intercept_type": "ads",
+      "track_value": ""
+     }
+    }
+   },
+   "card_context": {},
+   "predict_info": {}
+  }
+ ]
+}
