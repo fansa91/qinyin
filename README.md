@@ -6,7 +6,7 @@
 
 非官方第三方 Flutter 客户端，**游客态浏览 + 播放**：无需登录、无自建后端，直连汽水音乐（Luna）游客接口（`beta-luna.douyin.com`），接口整理自官方 App/EXE 逆向文档。全局原生 Material 3 设计，种子色为汽水系清新黄绿，播放页按封面主色染色。
 
-> 图标说明：当前图标为模板图标改色（黄绿）占位，正式图标待出图后替换。
+> 图标说明：正式 logo 为原创设计——黄绿渐变（汽水）底 + 白色八分音符（圆润气泡符头）配上升小气泡，呼应「沁」的水意与汽水感；由 `assets/icon/generate_icon.py` 以 PIL 超采样绘制生成，全平台图标同源。
 
 ## 功能
 
@@ -27,6 +27,8 @@
 - **音质仅三档 AAC**：medium ≈66k / higher ≈130k / highest ≈258k（逐曲下发，个别曲目无 highest）；无损/Hi-Res/空间音频游客从不下发
 - **新鲜模式官方 Feed 不可用**（游客被挡）：以本地队列 + 上下滑 + 预取实现同等形态
 - **无云功能**：无账号、无关注、无发评论（评论只读）、无云端同步；收藏/歌单/历史均为本地 SharedPreferences
+- **播放直链 24 小时过期**：签名链接由服务端签发、有效期约 24h；播放按 `expire_at` 缓存自动重拉，下载前强制重解析，本地已下载文件不受影响
+- **iOS 包未签名**：Release 的 IPA 为未签名包，不能直接安装，需自行签名（如 AltStore / SideStore / 企业签等）后使用
 - **受限曲目**：seo 无播放流时明确拒绝并提示，不提供试听拼接
 
 ## 接口与解析要点（抓真实样本实测）
@@ -35,8 +37,19 @@
 - 歌词为 KRC 逐字格式：`[startMs,durMs]<off,dur,flag>字…`，解析时剥逐字标签留纯文本行；兼容普通 LRC
 - POST `/luna/*` 用 App UA `Luna/19.1.0 Android` + JSON；GET 用 Web UA；无 Cookie、无签名头
 
+## 下载与安装
+
+到 [Releases](https://github.com/fansa91/qinyin/releases) 下载对应平台的包（`<版本>` 为三段版本号，v0.1 发布即 `0.1.0`）：
+
+| 平台 | 资产 | 说明 |
+|---|---|---|
+| Android | `qinyin-<版本>-android-arm64-v8a.apk`（主流机型选这个）/ `qinyin-<版本>-android-armeabi-v7a.apk` / `qinyin-<版本>-android-x86_64.apk` | 分架构 APK，直接安装 |
+| iOS | `qinyin-<版本>-ios-unsigned.ipa` | **未签名**，需自行签名后安装（见游客限制一节） |
+| macOS | `qinyin-<版本>-macos.dmg` | 桌面资产版本号沿用 tag 原文（如 `qinyin-0.1-macos.dmg`） |
+| Windows | `qinyin-<版本>-windows-x64.zip` | 解压即用；版本号同上（如 `qinyin-0.1-windows-x64.zip`） |
+
 ## 构建与发布
 
-- 版本线 0.1 起（pubspec `0.1.0+1`）；CI 由 tag 解析 `--build-name`（补齐三段）+ `--build-number=run_number`
-- Android 固定签名：keystore 材料在仓库外，四个变量 `ANDROID_KEYSTORE_BASE64 / ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_PASSWORD / ANDROID_KEY_ALIAS` 只进 GitHub Secrets；未配置时 CI 临时自签
-- `flutter analyze` + `flutter test`（fixture 为真实响应裁剪：discover/discover_mix/playlist/seo_track）
+- 版本线 0.1 起（pubspec `0.1.0+1`）；推 `v*` tag 触发 CI：由 tag 解析 `--build-name`（补齐三段，如 `v0.1` → `0.1.0`）+ `--build-number=run_number`，四端构建后自动发 Release；移动端资产名用三段 `BUILD_NAME`，桌面资产用 tag 原文
+- Android 固定签名：keystore 材料在仓库外，四个变量 `ANDROID_KEYSTORE_BASE64 / ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_PASSWORD / ANDROID_KEY_ALIAS` 只进 GitHub Secrets（值不入库）；未配置时 CI 每次临时自签，签名不一致将无法覆盖升级、需卸载重装
+- `flutter analyze` + `flutter test`（fixture 为真实响应裁剪并脱敏（签名参数已替换）：discover/discover_mix/playlist/seo_track）

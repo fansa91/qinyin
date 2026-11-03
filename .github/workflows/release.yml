@@ -71,10 +71,19 @@ jobs:
           echo "BUILD_NUMBER=${{ github.run_number }}" >> "$GITHUB_ENV"
       - run: flutter build apk --release --split-per-abi --build-name=${{ env.BUILD_NAME }} --build-number=${{ env.BUILD_NUMBER }}
 
+      - name: Rename APKs
+        run: |
+          cd build/app/outputs/flutter-apk
+          for f in app-*-release.apk; do
+            abi="${f#app-}"; abi="${abi%-release.apk}"
+            mv "$f" "qinyin-${{ env.BUILD_NAME }}-android-${abi}.apk"
+          done
+          ls -la
+
       - uses: actions/upload-artifact@v4
         with:
           name: android-apk
-          path: build/app/outputs/flutter-apk/app-*-release.apk
+          path: build/app/outputs/flutter-apk/qinyin-*-android-*.apk
 
   # ---------------- iOS ----------------
   ios:
@@ -111,13 +120,22 @@ jobs:
           echo "Packaging $APP_PATH"
           rm -rf /tmp/ipapack && mkdir -p /tmp/ipapack/Payload build/ios/ipa
           cp -R "$APP_PATH" /tmp/ipapack/Payload/
-          cd /tmp/ipapack && zip -qry "$OLDPWD/build/ios/ipa/qinyin-unsigned.ipa" Payload
+          cd /tmp/ipapack && zip -qry "$OLDPWD/build/ios/ipa/qinyin-${{ env.BUILD_NAME }}-ios-unsigned.ipa" Payload
           ls -la "$OLDPWD/build/ios/ipa/"
+
+      - name: Rename IPA
+        run: |
+          cd build/ios/ipa
+          target="qinyin-${{ env.BUILD_NAME }}-ios-unsigned.ipa"
+          for f in *.ipa; do
+            [ "$f" = "$target" ] || mv "$f" "$target"
+          done
+          ls -la
 
       - uses: actions/upload-artifact@v4
         with:
           name: ios-ipa
-          path: build/ios/ipa/*.ipa
+          path: build/ios/ipa/qinyin-*-ios-unsigned.ipa
 
   # ---------------- macOS ----------------
   macos:
