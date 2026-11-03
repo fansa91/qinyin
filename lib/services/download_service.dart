@@ -116,6 +116,16 @@ class DownloadService extends ChangeNotifier {
   Future<DownloadRecord> download(Track track) async {
     final quality = settings.defaultQuality;
     final existing = _records.where((r) => r.trackId == track.id).firstOrNull;
+    // 无损优先分支：设置选了无损且该曲带平台无损档 → 解密后落盘 FLAC。
+    // 放在通用早返回之前，避免已下过 m4a 时误把 m4a 记录当无损交付。
+    if (quality == 'lossless' && track.platformLossless != null) {
+      if (existing != null &&
+          existing.quality == 'lossless' &&
+          localPathFor(track.id) != null) {
+        return existing;
+      }
+      return _downloadLossless(track);
+    }
     if (existing != null && existing.quality == quality ||
         existing != null && localPathFor(track.id) != null) {
       return existing;
@@ -176,6 +186,58 @@ class DownloadService extends ChangeNotifier {
     await _persist();
     notifyListeners();
     return record;
+  }
+
+  /// 无损下载：经与播放共用的解密链备妥本地 FLAC（缓存命中时秒下），
+  /// 再按文件名模板复制进下载目录落盘 .flac（不写任何标签）。
+  /// 解密/下载失败抛异常（不静默回落 m4a，避免名实不符）。
+  Future<DownloadRecord> _downloadLossless(Track track) async {
+    if (_tasks.containsKey(track.id)) {
+      throw StateError('正在下载中');
+    }
+    _tasks[track.id] = DownloadTask(track.id, 0);
+    notifyListeners();
+    try {
+      final flacPath = await resolver.prepareLossless(
+        track,
+        onProgress: (received, total) {
+          final task = _tasks[track.id];
+          if (task != null) {
+            task.progress = total > 0 ? received / total : -1;
+            notifyListeners();
+          }
+        },
+      );
+      final dir = await _downloadDir();
+      final base = renderDownloadFilename(
+        settings.filenameFormat,
+        artist: track.artistNames,
+        title: track.name,
+        album: track.albumName,
+        quality: 'lossless',
+      );
+      final dest = await uniqueFlacPath(dir.path, base);
+      await File(flacPath).copy(dest);
+      final size = await File(dest).length();
+      final record = DownloadRecord(
+        trackId: track.id,
+        title: track.name,
+        artist: track.artistNames,
+        path: dest,
+        quality: 'lossless',
+        size: size,
+        createdAt: DateTime.now().millisecondsSinceEpoch,
+      );
+      _records = [record, ..._records.where((r) => r.trackId != track.id)];
+      _tasks.remove(track.id);
+      await _persist();
+      notifyListeners();
+      return record;
+    } catch (e) {
+      _tasks.remove(track.id);
+      notifyListeners();
+      rethrow;
+    }
   }
 
   void cancel(String trackId) {

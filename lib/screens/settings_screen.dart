@@ -119,7 +119,7 @@ class SettingsScreen extends StatelessWidget {
           children: [
             TextField(controller: controller),
             const SizedBox(height: 8),
-            const Text('占位符：{artist} {title} {album} {quality}\n扩展名固定 .m4a',
+            const Text('占位符：{artist} {title} {album} {quality}\n扩展名：普通音质 .m4a，无损（FLAC）下载为 .flac',
                 style: TextStyle(fontSize: 12)),
           ],
         ),

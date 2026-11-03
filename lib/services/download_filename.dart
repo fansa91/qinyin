@@ -21,12 +21,19 @@ String renderDownloadFilename(
 }
 
 /// 在目录内找不冲突的 .m4a 路径（同名追加序号）
-Future<String> uniqueM4aPath(String dir, String baseName) async {
-  var candidate = '$dir/$baseName.m4a';
+Future<String> uniqueM4aPath(String dir, String baseName) =>
+    _uniquePath(dir, baseName, '.m4a');
+
+/// 在目录内找不冲突的 .flac 路径（无损下载用）
+Future<String> uniqueFlacPath(String dir, String baseName) =>
+    _uniquePath(dir, baseName, '.flac');
+
+Future<String> _uniquePath(String dir, String baseName, String ext) async {
+  var candidate = '$dir/$baseName$ext';
   var i = 1;
   while (await File(candidate).exists()) {
     i++;
-    candidate = '$dir/$baseName ($i).m4a';
+    candidate = '$dir/$baseName ($i)$ext';
   }
   return candidate;
 }

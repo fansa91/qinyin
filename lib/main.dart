@@ -13,6 +13,7 @@ import 'screens/search_screen.dart';
 import 'screens/settings_screen.dart';
 import 'services/download_service.dart';
 import 'services/library_service.dart';
+import 'services/lossless_cache.dart';
 import 'services/play_resolver.dart';
 import 'services/player_service.dart';
 import 'services/qishui_service.dart';
@@ -26,7 +27,8 @@ void main() async {
   final library = LibraryService();
   await library.init();
   final service = QishuiService();
-  final resolver = PlayResolver(service.seoTrack);
+  final resolver =
+      PlayResolver(service.seoTrack, losslessCache: LosslessCache());
   final downloads = DownloadService(resolver, settings);
   await downloads.init();
   final player = PlayerService(resolver, settings, library);
@@ -122,11 +124,15 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   int _currentIndex = 0; // 0 首页 1 推荐 2 下载 3 我的
 
-  List<Widget> get _pages => const [
-        HomeScreen(),
-        RecommendScreen(),
-        DownloadsScreen(),
-        LibraryScreen(),
+  List<Widget> get _pages => [
+        const HomeScreen(),
+        RecommendScreen(
+          active: _currentIndex == 1,
+          onGoHome: () => setState(() => _currentIndex = 0),
+          onGoMine: () => setState(() => _currentIndex = 3),
+        ),
+        const DownloadsScreen(),
+        const LibraryScreen(),
       ];
 
   void _openPlayer() {

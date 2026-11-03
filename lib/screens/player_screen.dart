@@ -14,6 +14,7 @@ import '../services/play_resolver.dart';
 import '../services/player_service.dart';
 import '../services/settings_service.dart';
 import '../widgets/cover_image.dart';
+import '../widgets/fresh_pager.dart';
 
 /// 播放页：移动端为新鲜模式（纵向 PageView 上下滑切歌），
 /// 桌面 ≥900 为官方双栏（左封面 + 右歌词列）。
@@ -32,83 +33,13 @@ class PlayerScreen extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 /// 上下滑切歌实现说明（硬性口径）：
-/// - 纵向 PageView 承载整条队列，一页一首；
-/// - 用户滑动落点 onPageChanged → 与按钮完全相同的推进入口：
-///   LIST/SINGLE 走 PlayerService.jumpTo（队列线性定位），
-///   SHUFFLE 按滑动方向走 PlayerService.next()/prev()（随机/历史栈）；
-/// - 反过来，按钮切歌、播完自动推进改变 currentIndex 时，
-///   监听器把 PageView 同步动画到新下标（_syncGuard 防回环）。
+/// - 纵向 PageView 承载整条队列，一页一首，机制在 [FreshPager] 组件里
+///   （播放页与推荐页组件级共用，全 App 只有一份实现）；
+/// - 用户滑动落点 → 与按钮完全相同的推进入口（jumpTo / next / prev）；
+/// - 按钮切歌、播完自动推进改变下标时，FreshPager 监听并同步 PageView。
 /// 两种方向最终都汇入 PlayerService._playAt（含预取与续拉）。
-class FreshPlayer extends StatefulWidget {
+class FreshPlayer extends StatelessWidget {
   const FreshPlayer({super.key});
-
-  @override
-  State<FreshPlayer> createState() => _FreshPlayerState();
-}
-
-class _FreshPlayerState extends State<FreshPlayer> {
-  PageController? _controller;
-  PlayerService? _player;
-  bool _syncGuard = false;
-  int _lastIndex = 0;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final player = context.read<PlayerService>();
-    if (_player != player) {
-      _player?.removeListener(_onPlayerChanged);
-      _player = player;
-      _lastIndex = player.currentIndex;
-      _controller?.dispose();
-      _controller = PageController(initialPage: player.currentIndex);
-      player.addListener(_onPlayerChanged);
-    }
-  }
-
-  @override
-  void dispose() {
-    _player?.removeListener(_onPlayerChanged);
-    _controller?.dispose();
-    super.dispose();
-  }
-
-  /// 播放器下标变化（按钮/自动推进）→ 同步 PageView
-  void _onPlayerChanged() {
-    final player = _player;
-    final controller = _controller;
-    if (player == null || controller == null || !controller.hasClients) return;
-    final page = controller.page?.round();
-    if (page != null && page != player.currentIndex) {
-      _syncGuard = true;
-      controller
-          .animateToPage(
-            player.currentIndex,
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOut,
-          )
-          .whenComplete(() => _syncGuard = false);
-    }
-    if (mounted) setState(() => _lastIndex = player.currentIndex);
-  }
-
-  /// 用户滑动落点 → 队列推进（与按钮共用入口）
-  Future<void> _onSwipe(int page) async {
-    final player = _player;
-    if (player == null || _syncGuard) return;
-    if (page == player.currentIndex) return;
-    if (player.mode == QueueLoopMode.shuffle) {
-      if (page > _lastIndex) {
-        await player.next();
-      } else {
-        await player.prev();
-      }
-      _onPlayerChanged();
-    } else {
-      await player.jumpTo(page);
-    }
-    _lastIndex = player.currentIndex;
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -120,13 +51,8 @@ class _FreshPlayerState extends State<FreshPlayer> {
       );
     }
     return Scaffold(
-      body: PageView.builder(
-        controller: _controller,
-        scrollDirection: Axis.vertical,
-        itemCount: player.queueItems.length,
-        onPageChanged: _onSwipe,
-        itemBuilder: (context, i) =>
-            _FreshPage(track: player.queueItems[i], index: i),
+      body: FreshPager(
+        pageBuilder: (context, track, i) => _FreshPage(track: track, index: i),
       ),
     );
   }
@@ -323,6 +249,22 @@ class _FreshContent extends StatelessWidget {
               ),
             ],
           ),
+          if (isCurrent && player.preparingLossless)
+            const Padding(
+              padding: EdgeInsets.only(top: 10),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  SizedBox(width: 8),
+                  Text('正在准备无损（下载并解密中）…',
+                      style: TextStyle(fontSize: 12)),
+                ],
+              ),
+            ),
           const Spacer(),
           if (isCurrent) ...[
             Slider(
@@ -394,7 +336,9 @@ class _FreshContent extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const ListTile(title: Text('播放音质（游客最高 AAC ≈258k）')),
+            const ListTile(
+                title: Text('播放音质'),
+                subtitle: Text('无损仅推荐流部分曲目提供，其余最高 AAC ≈258k')),
             for (final q in SettingsService.qualityOptions)
               RadioListTile<String>(
                 value: q,
@@ -543,6 +487,36 @@ class DesktopPlayer extends StatelessWidget {
                       Text(formatCount(fullTrack.countComment ?? 0)),
                     ],
                   ),
+                  if (player.preparingLossless)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 14),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                          SizedBox(width: 8),
+                          Text('正在准备无损（下载并解密中）…',
+                              style: TextStyle(fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                  if (player.currentQuality != null &&
+                      SettingsService.qualityOptions
+                          .contains(player.currentQuality))
+                    Padding(
+                      padding: const EdgeInsets.only(top: 10),
+                      child: Chip(
+                        avatar: const Icon(Icons.high_quality, size: 16),
+                        label: Text(SettingsService.qualityLabel(
+                                player.currentQuality!)
+                            .split(' ')
+                            .first),
+                      ),
+                    ),
                 ],
               ),
             ),

@@ -102,6 +102,12 @@ class Track {
   final String? coverColorHex; // colors.cover_gradient_effect_color[0].rgb
   final Map<String, List<String>> makers; // composers/lyricists/...
 
+  /// 车机平台通道 full 版 video_model 的流列表（B 路，含加密无损档）。
+  /// 只来自推荐流条目的 player_info.full；preview（~60s 试听）不收录，
+  /// 绝不作整曲源。其他来源的曲目为空——无损只对这批曲目可用。
+  /// 不进 toJson（会话级数据，落盘收藏/历史不携带）。
+  final List<PlayStream> platformStreams;
+
   const Track({
     required this.id,
     required this.name,
@@ -117,11 +123,20 @@ class Track {
     this.countShared,
     this.coverColorHex,
     this.makers = const {},
+    this.platformStreams = const [],
   });
 
   String get artistNames => artists.map((a) => a.name).join(' / ');
   String? get coverUrl => cover?.url();
   String? get coverUrlSmall => cover?.url(webp: true);
+
+  /// 平台无损档（需 spade 解密）；没有返回 null
+  PlayStream? get platformLossless {
+    for (final s in platformStreams) {
+      if (s.quality == 'lossless' && s.spadeA.isNotEmpty) return s;
+    }
+    return null;
+  }
 
   factory Track.fromJson(Map<String, dynamic> j) {
     final album = (j['album'] as Map<String, dynamic>?) ?? const {};
@@ -204,6 +219,14 @@ class Track {
     if (grads != null && grads.isNotEmpty) {
       colorHex = (grads.first as Map<String, dynamic>)['rgb'] as String?;
     }
+    // B 路无损数据源：只取 full 版内嵌 video_model（preview 是试听子集，
+    // 结构上就不给整曲，绝不能混入）；解析失败视为空
+    final fullVmi =
+        (full['video_model_info'] as Map<String, dynamic>?) ?? const {};
+    final fullVmRaw = fullVmi['video_model'];
+    final platformStreams = fullVmRaw is String
+        ? parseVideoModelStreams(fullVmRaw)
+        : const <PlayStream>[];
     return Track(
       id: id,
       name: _str(base['name']),
@@ -225,6 +248,7 @@ class Track {
       countShared: stats['count_shared'] == null ? null : _int(stats['count_shared']),
       coverColorHex: colorHex,
       makers: makers,
+      platformStreams: platformStreams,
     );
   }
 
@@ -484,6 +508,9 @@ class PlayStream {
   final int size;
   final String mainUrl;
   final String backupUrl;
+
+  /// CENC 加密档的 spade_a（平台 B 路每档自带；明文流为空串）
+  final String spadeA;
   const PlayStream({
     required this.quality,
     this.codecType = '',
@@ -491,7 +518,38 @@ class PlayStream {
     this.size = 0,
     required this.mainUrl,
     this.backupUrl = '',
+    this.spadeA = '',
   });
+
+  bool get isEncrypted => spadeA.isNotEmpty;
+}
+
+/// 解析内嵌 video_model JSON 串 → 流列表（seo 与平台通道共用同一形状）
+List<PlayStream> parseVideoModelStreams(String raw) {
+  if (raw.isEmpty) return const [];
+  try {
+    final vm = jsonDecode(raw) as Map<String, dynamic>;
+    final streams = <PlayStream>[];
+    for (final v in (vm['video_list'] as List?) ?? const []) {
+      final item = v as Map<String, dynamic>;
+      final meta = (item['video_meta'] as Map<String, dynamic>?) ?? const {};
+      final mainUrl = _str(item['main_url']);
+      if (mainUrl.isEmpty) continue;
+      final enc = (item['encrypt_info'] as Map<String, dynamic>?) ?? const {};
+      streams.add(PlayStream(
+        quality: _str(meta['quality']),
+        codecType: _str(meta['codec_type']),
+        bitrate: _int(meta['bitrate']),
+        size: _int(meta['size']),
+        mainUrl: mainUrl,
+        backupUrl: _str(item['backup_url']),
+        spadeA: _str(enc['spade_a']),
+      ));
+    }
+    return streams;
+  } catch (_) {
+    return const [];
+  }
 }
 
 /// seo_track 一次拿齐的播放页数据
@@ -530,29 +588,9 @@ class SeoTrack {
     final seoTrack = (body['seo_track'] as Map<String, dynamic>?) ?? const {};
     final trackJson = (seoTrack['track'] as Map<String, dynamic>?) ?? const {};
     final player = (body['track_player'] as Map<String, dynamic>?) ?? const {};
-    final streams = <PlayStream>[];
     final vmRaw = player['video_model'];
-    if (vmRaw is String && vmRaw.isNotEmpty) {
-      try {
-        final vm = jsonDecode(vmRaw) as Map<String, dynamic>;
-        for (final v in (vm['video_list'] as List?) ?? const []) {
-          final item = v as Map<String, dynamic>;
-          final meta = (item['video_meta'] as Map<String, dynamic>?) ?? const {};
-          final mainUrl = _str(item['main_url']);
-          if (mainUrl.isEmpty) continue;
-          streams.add(PlayStream(
-            quality: _str(meta['quality']),
-            codecType: _str(meta['codec_type']),
-            bitrate: _int(meta['bitrate']),
-            size: _int(meta['size']),
-            mainUrl: mainUrl,
-            backupUrl: _str(item['backup_url']),
-          ));
-        }
-      } catch (_) {
-        // video_model 解析失败视为无可播流
-      }
-    }
+    final streams =
+        vmRaw is String ? parseVideoModelStreams(vmRaw) : const <PlayStream>[];
     final commentsJson = body['comments'] as Map<String, dynamic>?;
     return SeoTrack(
       track: Track.fromJson(trackJson),

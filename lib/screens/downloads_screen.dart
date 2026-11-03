@@ -56,7 +56,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                   title:
                       Text(r.title, maxLines: 1, overflow: TextOverflow.ellipsis),
                   subtitle: Text(
-                      '${r.artist} · ${r.quality} · ${(r.size / 1024 / 1024).toStringAsFixed(1)} MB · M4A（未写标签）'),
+                      '${r.artist} · ${r.quality} · ${(r.size / 1024 / 1024).toStringAsFixed(1)} MB · ${r.path.endsWith('.flac') ? 'FLAC' : 'M4A'}（未写标签）'),
                   onTap: _selectMode
                       ? () => setState(() {
                             if (!_selected.remove(r.trackId)) {

@@ -28,6 +28,12 @@ class PlayerService extends ChangeNotifier {
 
   bool _playing = false;
   bool _loading = false;
+  bool _preparingLossless = false;
+
+  /// 当前队列来源标记（推荐页建队时传 'recommend'，其余来源为 null）。
+  /// 推荐页据此判断「队列已经是推荐流」还是「别的内容在播，不要打断」。
+  String? queueTag;
+  static const String recommendQueueTag = 'recommend';
   Duration _position = Duration.zero;
   Duration _duration = Duration.zero;
   String? _error;
@@ -65,6 +71,9 @@ class PlayerService extends ChangeNotifier {
   SeoTrack? get currentSeo => _currentSeo;
   bool get playing => _playing;
   bool get loading => _loading;
+
+  /// 正在下载+解密无损（耗时操作，UI 显示准备态，别让用户以为卡死）
+  bool get preparingLossless => _preparingLossless;
   bool get hasQueue => !queue.isEmpty;
   Duration get position => _position;
   Duration get duration => _duration;
@@ -79,9 +88,11 @@ class PlayerService extends ChangeNotifier {
     List<Track> tracks,
     int startIndex, {
     Future<List<Track>> Function()? loadMore,
+    String? tag,
   }) async {
     if (tracks.isEmpty) return;
     onLoadMore = loadMore;
+    queueTag = tag;
     queue.setQueue(tracks, startIndex);
     await _playAt(queue.index);
   }
@@ -132,6 +143,7 @@ class PlayerService extends ChangeNotifier {
     if (track == null) return;
     final token = ++_playToken;
     _loading = true;
+    _preparingLossless = false;
     _error = null;
     _position = Duration.zero;
     _duration = Duration(milliseconds: track.durationMs);
@@ -144,22 +156,34 @@ class PlayerService extends ChangeNotifier {
         _currentSeo = resolver.cachedSeo(track.id);
         _currentQuality = '本地文件';
       } else {
-        final resolved = await resolver.resolve(
-          track.id,
+        final resolved = await resolver.resolveTrack(
+          track,
           quality: settings.defaultQuality,
+          onLosslessPreparing: () {
+            if (token == _playToken) {
+              _preparingLossless = true;
+              notifyListeners();
+            }
+          },
         );
         if (token != _playToken) return;
+        _preparingLossless = false;
         _currentSeo = resolver.cachedSeo(track.id);
         _currentQuality = resolved.stream.quality;
-        final source = UrlSource(resolved.stream.mainUrl);
-        try {
-          await _player.play(source);
-        } catch (_) {
-          // 主链失效回落备用链
-          if (resolved.stream.backupUrl.isNotEmpty) {
-            await _player.play(UrlSource(resolved.stream.backupUrl));
-          } else {
-            rethrow;
+        if (resolved.isLocal) {
+          // 无损解密产物：本地 FLAC 文件播放
+          await _player.play(DeviceFileSource(resolved.localPath!));
+        } else {
+          final source = UrlSource(resolved.stream.mainUrl);
+          try {
+            await _player.play(source);
+          } catch (_) {
+            // 主链失效回落备用链
+            if (resolved.stream.backupUrl.isNotEmpty) {
+              await _player.play(UrlSource(resolved.stream.backupUrl));
+            } else {
+              rethrow;
+            }
           }
         }
       }
@@ -179,11 +203,13 @@ class PlayerService extends ChangeNotifier {
     } on PlayUnavailable catch (e) {
       if (token != _playToken) return;
       _loading = false;
+      _preparingLossless = false;
       _error = e.message;
       notifyListeners();
     } catch (e) {
       if (token != _playToken) return;
       _loading = false;
+      _preparingLossless = false;
       _error = '播放失败：$e';
       notifyListeners();
     }
@@ -261,14 +287,27 @@ class PlayerService extends ChangeNotifier {
     final pos = _position;
     final wasPlaying = _playing;
     try {
-      final resolved = await resolver.resolve(track.id,
-          quality: quality, forceRefresh: false);
+      final resolved = await resolver.resolveTrack(
+        track,
+        quality: quality,
+        forceRefresh: false,
+        onLosslessPreparing: () {
+          _preparingLossless = true;
+          notifyListeners();
+        },
+      );
+      _preparingLossless = false;
       _currentSeo = resolver.cachedSeo(track.id);
       _currentQuality = resolved.stream.quality;
-      await _player.play(UrlSource(resolved.stream.mainUrl));
+      if (resolved.isLocal) {
+        await _player.play(DeviceFileSource(resolved.localPath!));
+      } else {
+        await _player.play(UrlSource(resolved.stream.mainUrl));
+      }
       await _player.seek(pos);
       if (!wasPlaying) await _player.pause();
     } catch (e) {
+      _preparingLossless = false;
       _error = '切换音质失败：$e';
     }
     notifyListeners();

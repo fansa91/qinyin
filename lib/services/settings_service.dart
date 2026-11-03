@@ -17,10 +17,16 @@ class SettingsService extends ChangeNotifier {
   static const _kFilenameFormat = 'download_filename_format';
   static const _kVolume = 'volume';
 
-  static const List<String> qualityOptions = ['medium', 'higher', 'highest'];
+  static const List<String> qualityOptions = [
+    'medium',
+    'higher',
+    'highest',
+    'lossless',
+  ];
   static String qualityLabel(String q) => switch (q) {
         'medium' => '标准 (AAC ≈66k)',
         'highest' => '最高 (AAC ≈258k)',
+        'lossless' => '无损 (FLAC · 仅推荐流部分曲目提供)',
         _ => '高品质 (AAC ≈130k)',
       };
 
