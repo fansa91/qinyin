@@ -92,6 +92,7 @@ class Track {
   final List<ArtistRef> artists;
   final String albumId;
   final String albumName;
+  final int releaseDate; // 专辑发行时间（epoch 秒，0=未知；下载写标签用）
   final CoverArt? cover;
   final int durationMs;
   final String vid;
@@ -114,6 +115,7 @@ class Track {
     this.artists = const [],
     this.albumId = '',
     this.albumName = '',
+    this.releaseDate = 0,
     this.cover,
     this.durationMs = 0,
     this.vid = '',
@@ -127,6 +129,17 @@ class Track {
   });
 
   String get artistNames => artists.map((a) => a.name).join(' / ');
+
+  /// 标签用发行日期（yyyy-MM-dd，按 +08:00 日历日——平台的 release_date
+  /// 是东八区零点 epoch）；未知返回 null
+  String? get dateTag {
+    if (releaseDate <= 0) return null;
+    final d = DateTime.fromMillisecondsSinceEpoch(releaseDate * 1000,
+        isUtc: true).add(const Duration(hours: 8));
+    String two(int v) => v.toString().padLeft(2, '0');
+    return '${d.year}-${two(d.month)}-${two(d.day)}';
+  }
+
   String? get coverUrl => cover?.url();
   String? get coverUrlSmall => cover?.url(webp: true);
 
@@ -170,6 +183,7 @@ class Track {
           .toList(),
       albumId: _str(album['id']),
       albumName: _str(album['name']),
+      releaseDate: _int(album['release_date']),
       cover: cover,
       durationMs: _int(j['duration']),
       vid: _str(j['vid']),
@@ -235,6 +249,7 @@ class Track {
           .toList(),
       albumId: _str(albumLink['id']),
       albumName: _str(albumLink['name']),
+      releaseDate: _int(albumLink['release_date']),
       cover: CoverArt.maybe(display['cover_url'] as Map<String, dynamic>?),
       durationMs: _int(base['duration_ms']),
       vid: _str(player['vid']),
@@ -269,7 +284,12 @@ class Track {
         'id': id,
         'name': name,
         'artists': artists.map((a) => a.toJson()).toList(),
-        'album': {'id': albumId, 'name': albumName, if (cover != null) 'url_cover': cover!.toJson()},
+        'album': {
+          'id': albumId,
+          'name': albumName,
+          if (releaseDate > 0) 'release_date': releaseDate,
+          if (cover != null) 'url_cover': cover!.toJson()
+        },
         'duration': durationMs,
         'vid': vid,
         'bit_rates': bitRates.map((b) => b.toJson()).toList(),

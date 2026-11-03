@@ -7,7 +7,7 @@ import '../services/download_service.dart';
 import '../services/player_service.dart';
 
 /// 下载管理：多选删除、进度显示、点按播放本地文件。
-/// M4A 文件不写 ID3 标签（格式限制，如实标注）。
+/// 每条记录按实际结果标注标签状态（已写/未写/写失败）。
 class DownloadsScreen extends StatefulWidget {
   const DownloadsScreen({super.key});
 
@@ -56,7 +56,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                   title:
                       Text(r.title, maxLines: 1, overflow: TextOverflow.ellipsis),
                   subtitle: Text(
-                      '${r.artist} · ${r.quality} · ${(r.size / 1024 / 1024).toStringAsFixed(1)} MB · ${r.path.endsWith('.flac') ? 'FLAC' : 'M4A'}（未写标签）'),
+                      '${r.artist} · ${r.quality} · ${(r.size / 1024 / 1024).toStringAsFixed(1)} MB · ${r.path.endsWith('.flac') ? 'FLAC' : 'M4A'} · ${_tagLabel(r.tagStatus)}'),
                   onTap: _selectMode
                       ? () => setState(() {
                             if (!_selected.remove(r.trackId)) {
@@ -115,6 +115,12 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
       body: isWide(context) ? ConstrainedCenter(child: body) : body,
     );
   }
+
+  static String _tagLabel(String tagStatus) => switch (tagStatus) {
+        'tagged' => '已写标签',
+        'failed' => '标签写入失败',
+        _ => '未写标签',
+      };
 
   void _playLocal(BuildContext context, DownloadRecord r) {
     final track = Track(
