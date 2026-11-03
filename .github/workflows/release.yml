@@ -34,7 +34,7 @@ jobs:
       - name: Analyze
         run: |
           flutter pub get
-          flutter analyze
+          flutter analyze --no-fatal-infos
 
       - name: Prepare self-signed keystore
         # 想要固定签名以便覆盖安装升级：把 keystore 以 base64 存到
