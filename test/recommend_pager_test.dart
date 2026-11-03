@@ -26,6 +26,45 @@ void main() {
       expect(tracks, isNotEmpty);
       expect(tracks.first.id, isNotEmpty);
     });
+
+    test('platform fixture：车机开放平台 feed 字段映射（§15.3）', () {
+      final tracks =
+          QishuiService.parsePlatformItems(fixture('platform_feed.json'));
+      expect(tracks.length, 3);
+      final t0 = tracks.first;
+      expect(t0.id, isNotEmpty);
+      expect(t0.name, isNotEmpty);
+      // 歌手在 related_info.artist_links、专辑在 album_link
+      expect(t0.artists, isNotEmpty);
+      expect(t0.artists.first.name, isNotEmpty);
+      expect(t0.artists.first.id, isNotEmpty);
+      expect(t0.albumId, isNotEmpty);
+      expect(t0.albumName, isNotEmpty);
+      // 封面在 display_info.cover_url，沿用拼装规则可出 URL
+      expect(t0.coverUrl, isNotNull);
+      expect(t0.coverUrl, contains(t0.cover!.uri));
+      // 时长 base_info.duration_ms、统计 media_stats、制作团队 song_maker_team
+      expect(t0.durationMs, greaterThan(0));
+      expect(t0.countCollected, isNotNull);
+      expect(t0.countComment, isNotNull);
+      expect(t0.makers['composers'], isNotEmpty);
+      // vid 与 full.bit_rates 元数据（含 lossless 档，仅元数据）
+      expect(t0.vid, isNotEmpty);
+      expect(t0.bitRates.map((b) => b.quality), contains('lossless'));
+    });
+
+    test('PlatformFeedService.commonParams：车机公共参数口径', () {
+      final p = PlatformFeedService.commonParams('1234567890',
+          timestampSeconds: 1700000000, nonce: 42);
+      expect(p['aid'], '765213');
+      expect(p['app_name'], 'byte_autoservice_lite');
+      expect(p['device_id'], '1234567890');
+      expect(p['did'], '1234567890');
+      expect(p['iid'], '1234567890');
+      expect(p['vehicle_id'], 'qishui-1234567890');
+      expect(p['_timestamp'], '1700000000');
+      expect(p['_nonce'], '42');
+    });
   });
 
   group('RecommendPager 多源轮转/去重/枯竭', () {
@@ -87,6 +126,112 @@ void main() {
       expect(page, isEmpty);
       expect(pager.hasMore, isFalse);
       expect(await pager.nextPage(), isEmpty);
+    });
+
+    test('平台主源优先：回退源不被调用', () async {
+      var fallbackCalls = 0;
+      final pager = RecommendPager(
+        fetchPlatformPage: (cursor) async =>
+            ([t('pf$cursor'), t('pf${cursor + 1}')], true),
+        fetchRelated: (seed) async {
+          fallbackCalls++;
+          return const [];
+        },
+        fetchPlaylistList: (cursor) async {
+          fallbackCalls++;
+          return (<Playlist>[], null, false);
+        },
+        fetchPlaylistTracks: (id, {cursor}) async {
+          fallbackCalls++;
+          return (const Playlist(id: 'p', title: ''), <Track>[], null);
+        },
+        fetchRadioPage: (id, cursor) async {
+          fallbackCalls++;
+          return const [];
+        },
+        radioIds: const ['r1'],
+      );
+      final page = await pager.nextPage(target: 2);
+      expect(page.map((e) => e.id), ['pf0', 'pf1']);
+      expect(fallbackCalls, 0);
+      expect(pager.usingFallback, isFalse);
+      expect(pager.hasMore, isTrue);
+    });
+
+    test('平台主源 cursor 按原始条数偏移推进', () async {
+      final cursors = <int>[];
+      final pager = RecommendPager(
+        fetchPlatformPage: (cursor) async {
+          cursors.add(cursor);
+          return (List.generate(20, (i) => t('c${cursor + i}')), true);
+        },
+        fetchRelated: (seed) async => const [],
+        fetchPlaylistList: (cursor) async => (<Playlist>[], null, false),
+        fetchPlaylistTracks: (id, {cursor}) async =>
+            (const Playlist(id: 'p', title: ''), <Track>[], null),
+        fetchRadioPage: (id, cursor) async => const [],
+        radioIds: const [],
+      );
+      await pager.nextPage(target: 12);
+      await pager.nextPage(target: 12); // 先吃 pending，之后再拉一页
+      await pager.nextPage(target: 12);
+      expect(cursors, [0, 20]);
+    });
+
+    test('平台主源报错 → 本会话回退三源出曲', () async {
+      final pager = RecommendPager(
+        fetchPlatformPage: (cursor) async => throw StateError('boom'),
+        fetchRelated: (seed) async => const [],
+        fetchPlaylistList: (cursor) async =>
+            ([const Playlist(id: 'p1', title: '歌单')], null, false),
+        fetchPlaylistTracks: (id, {cursor}) async =>
+            (const Playlist(id: 'p1', title: '歌单'), [t('fb1'), t('fb2')], null),
+        fetchRadioPage: (id, cursor) async => const [],
+        radioIds: const [],
+      );
+      final page = await pager.nextPage(target: 2);
+      expect(page.map((e) => e.id), containsAll(['fb1', 'fb2']));
+      expect(pager.usingFallback, isTrue);
+    });
+
+    test('平台主源空批 → 回退；主源与回退都空才枯竭', () async {
+      final pager = RecommendPager(
+        fetchPlatformPage: (cursor) async => (const <Track>[], true),
+        fetchRelated: (seed) async => const [],
+        fetchPlaylistList: (cursor) async => (<Playlist>[], null, false),
+        fetchPlaylistTracks: (id, {cursor}) async =>
+            (const Playlist(id: 'p', title: ''), <Track>[], null),
+        fetchRadioPage: (id, cursor) async => const [],
+        radioIds: const [],
+      );
+      final page = await pager.nextPage(target: 5);
+      expect(page, isEmpty);
+      expect(pager.usingFallback, isTrue);
+      expect(pager.hasMore, isFalse);
+    });
+
+    test('平台整批重复 3 次后切回退源', () async {
+      var platformCalls = 0;
+      final pager = RecommendPager(
+        fetchPlatformPage: (cursor) async {
+          platformCalls++;
+          // 每次都回同一首（第一批是新的，之后整批重复）
+          return ([t('same')], true);
+        },
+        fetchRelated: (seed) async => const [],
+        fetchPlaylistList: (cursor) async =>
+            ([const Playlist(id: 'p1', title: '歌单')], null, false),
+        fetchPlaylistTracks: (id, {cursor}) async =>
+            (const Playlist(id: 'p1', title: '歌单'), [t('fb')], null),
+        fetchRadioPage: (id, cursor) async => const [],
+        radioIds: const [],
+      );
+      final page1 = await pager.nextPage(target: 1);
+      expect(page1.single.id, 'same');
+      final page2 = await pager.nextPage(target: 1);
+      expect(page2.single.id, 'fb');
+      expect(platformCalls, 4); // 1 次成功 + 3 次整批重复后停用
+      expect(pager.usingFallback, isTrue);
     });
 
     test('reset 后可重新出曲（换一批）', () async {

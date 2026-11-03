@@ -169,6 +169,65 @@ class Track {
     );
   }
 
+  /// 车机开放平台推荐流 items[].entity.media 的解析（结构实测见 QISHUI_API.md §15.3）：
+  /// base_info 只有歌名/时长/制作团队；歌手在 related_info.artist_links、
+  /// 专辑在 related_info.album_link、封面在 display_info.cover_url、
+  /// 统计在 media_stats、音质元数据在 player_info.full.bit_rates。
+  static Track? fromPlatformMedia(Map<String, dynamic> media) {
+    final te = media['track_entity'] as Map<String, dynamic>?;
+    if (te == null) return null;
+    final base = (te['base_info'] as Map<String, dynamic>?) ?? const {};
+    final id = _str(base['id']);
+    if (id.isEmpty) return null;
+    final related = (te['related_info'] as Map<String, dynamic>?) ?? const {};
+    final albumLink = (related['album_link'] as Map<String, dynamic>?) ?? const {};
+    final display = (te['display_info'] as Map<String, dynamic>?) ?? const {};
+    final stats = (te['media_stats'] as Map<String, dynamic>?) ?? const {};
+    final player = (te['player_info'] as Map<String, dynamic>?) ?? const {};
+    final full = (player['full'] as Map<String, dynamic>?) ?? const {};
+    final makers = <String, List<String>>{};
+    final team = base['song_maker_team'] as Map<String, dynamic>?;
+    if (team != null) {
+      for (final e in team.entries) {
+        final list = e.value as List?;
+        if (list != null) {
+          makers[e.key] = list
+              .map((x) => _str((x as Map<String, dynamic>)['name']))
+              .where((s) => s.isNotEmpty)
+              .toList();
+        }
+      }
+    }
+    String? colorHex;
+    final colors = (display['colors'] as Map<String, dynamic>?) ?? const {};
+    final grads = colors['cover_gradient_effect_color'] as List?;
+    if (grads != null && grads.isNotEmpty) {
+      colorHex = (grads.first as Map<String, dynamic>)['rgb'] as String?;
+    }
+    return Track(
+      id: id,
+      name: _str(base['name']),
+      artists: ((related['artist_links'] as List?) ?? const [])
+          .map((e) => ArtistRef.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      albumId: _str(albumLink['id']),
+      albumName: _str(albumLink['name']),
+      cover: CoverArt.maybe(display['cover_url'] as Map<String, dynamic>?),
+      durationMs: _int(base['duration_ms']),
+      vid: _str(player['vid']),
+      bitRates: ((full['bit_rates'] as List?) ?? const [])
+          .map((e) => BitRate.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      countCollected:
+          stats['count_collected'] == null ? null : _int(stats['count_collected']),
+      countComment:
+          stats['count_comment'] == null ? null : _int(stats['count_comment']),
+      countShared: stats['count_shared'] == null ? null : _int(stats['count_shared']),
+      coverColorHex: colorHex,
+      makers: makers,
+    );
+  }
+
   /// 列表接口里 track 常被包一层：{track:{...}} 或 entity.track_wrapper.track
   static Track? fromWrapped(dynamic node) {
     if (node is! Map<String, dynamic>) return null;

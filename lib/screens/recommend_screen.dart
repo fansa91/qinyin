@@ -7,12 +7,12 @@ import '../services/qishui_service.dart';
 import '../services/recommend_pager.dart';
 import '../widgets/track_tile.dart';
 
-/// 推荐：可连续刷的歌曲流（形态对齐官方新鲜模式推荐流）。
+/// 推荐：可连续刷的歌曲流（官方推荐流本体）。
 ///
-/// 说明：官方推荐流本体（feed/song-tab）游客被服务端设备门拦截，
-/// 本页是同形态的游客版——内容由相关歌曲 + 发现歌单 + 电台三源组合，
-/// 会话内去重，可一直往下刷；详见 RecommendPager 注释与 QISHUI_API.md §14。
-/// 游客无账号画像，文案不假装个性化。
+/// 数据源（2026-11-04 实测，见 QISHUI_API.md §15）：官方推荐流经车机
+/// 开放平台通道（open.douyin.com LunaOpenSDK）游客可直接取到，主源即它；
+/// 平台源异常时自动回退 §14 的三源组合（相关歌曲 + 发现歌单 + 电台）。
+/// 游客拿到的是未个性化版（官方自述「登录后推荐更准」），文案如实标注。
 class RecommendScreen extends StatefulWidget {
   const RecommendScreen({super.key});
 
@@ -49,23 +49,41 @@ class _RecommendScreenState extends State<RecommendScreen> {
     });
     try {
       final service = context.read<QishuiService>();
-      final feed = await service.homeFeed();
+      // 主源（车机开放平台官方推荐流）不依赖 homeFeed：
+      // homeFeed 只为回退源提供电台与歌单快照，失败时单独兜底为空
+      final deviceId = await PlatformFeedService.loadOrCreateDeviceId();
+      final platform = PlatformFeedService(deviceId: deviceId);
+      HomeFeed? feed;
+      try {
+        feed = await service.homeFeed();
+      } catch (_) {
+        feed = null;
+      }
       final pager = RecommendPager(
+        fetchPlatformPage: (cursor) => platform.songTabPage(cursor),
         fetchRelated: service.relatedTracks,
         fetchPlaylistList: (cursor) => service.discoverMix(cursor: cursor),
         fetchPlaylistTracks: (id, {cursor}) =>
             service.playlistDetail(id, cursor: cursor),
         fetchRadioPage: service.radioTracksPage,
-        radioIds: feed.radios.map((r) => r.id).toList(),
+        radioIds: feed?.radios.map((r) => r.id).toList() ?? const [],
       )..prime(
-          playlists: feed.playlists,
-          mixCursor: feed.mixCursor,
-          mixHasMore: feed.mixHasMore,
+          playlists: feed?.playlists ?? const [],
+          mixCursor: feed?.mixCursor,
+          mixHasMore: feed?.mixHasMore ?? false,
         );
       _pager = pager;
       _tracks.clear();
       final first = await pager.nextPage();
       if (!mounted) return;
+      if (first.isEmpty && !pager.hasMore) {
+        // 主源与回退源都没能出曲：按加载失败处理，给重试入口
+        setState(() {
+          _initError = '加载失败，请检查网络';
+          _initialLoading = false;
+        });
+        return;
+      }
       setState(() {
         _tracks.addAll(first);
         _initialLoading = false;
@@ -166,7 +184,7 @@ class _RecommendScreenState extends State<RecommendScreen> {
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
               child: Text(
-                '游客推荐 · 来自公开歌单、电台与相关歌曲，登录后官方推荐流不可用，此为同形态游客版',
+                '官方推荐流 · 游客版（登录后推荐更准）',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),

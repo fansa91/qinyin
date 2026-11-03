@@ -4,13 +4,14 @@
 
 # 沁音（汽水音乐第三方游客态客户端）
 
-非官方第三方 Flutter 客户端，**游客态浏览 + 播放**：无需登录、无自建后端，直连汽水音乐（Luna）游客接口（`beta-luna.douyin.com`），接口整理自官方 App/EXE 逆向文档。全局原生 Material 3 设计，种子色为汽水系清新黄绿，播放页按封面主色染色。
+非官方第三方 Flutter 客户端，**游客态浏览 + 播放**：无需登录、无自建后端，直连汽水音乐（Luna）游客接口（`beta-luna.douyin.com`）与车机开放平台通道（`open.douyin.com`），接口整理自官方 App/EXE 逆向文档。全局原生 Material 3 设计，种子色为汽水系清新黄绿，播放页按封面主色染色。
 
 > 图标说明：正式 logo 为原创设计——黄绿渐变（汽水）底 + 白色八分音符（圆润气泡符头）配上升小气泡，呼应「沁」的水意与汽水感；由 `assets/icon/generate_icon.py` 以 PIL 超采样绘制生成，全平台图标同源。
 
 ## 功能
 
 - **首页发现流**：推荐电台横滑、推荐歌单（discover + discover/mix，带加载更多）、「随便听听」；下拉刷新
+- **推荐页**：官方推荐流本体（车机开放平台通道，游客未个性化版）无限刷，会话内去重，点任意一首即以整条流建队列、播到队尾自动续拉；平台通道异常时自动回退组合源（相关歌曲 + 发现歌单 + 电台）
 - **新鲜模式播放页（移动端）**：整页一首歌——大封面、当前歌词行、收藏/评论/分享真实计数（seo stats）、细进度条、底部三键（发现/大暂停/我的）；**上下滑切歌**（纵向 PageView 承载队列，上滑下一首、下滑上一首，与按钮切歌、播完自动推进共用同一套队列推进逻辑）；点封面进全量歌词页（滚动+当前行高亮）；评论只读展示
 - **桌面播放页（≥900）**：左封面（歌名/歌手/计数）+ 右歌词列（顶部制作信息：作曲/作词/编曲/制作），底部通栏播放条右端含 词/循环模式/队列/音量
 - **本地队列（照官方模型）**：来源点播即建队列；LIST 列表循环 / SHUFFLE 随机（带历史回退）/ SINGLE 单曲循环三模式；歌单分页 cursor 续拉追加；下一首预取（seo 预解析，失败静默）
@@ -25,7 +26,7 @@
 
 - **无全文搜索**：游客搜索结果被服务端掏空，搜索页只做联想词 + 本地历史，点联想词给诚实提示，不假装出结果
 - **音质仅三档 AAC**：medium ≈66k / higher ≈130k / highest ≈258k（逐曲下发，个别曲目无 highest）；无损/Hi-Res/空间音频游客从不下发
-- **新鲜模式官方 Feed 不可用**（游客被挡）：以本地队列 + 上下滑 + 预取实现同等形态
+- **推荐流为游客未个性化版**：App 本体 feed（feed/song-tab）游客被设备门挡；推荐页改走车机开放平台通道取同一条官方流，官方自述「登录后推荐更准」——游客版内容真实但不带个人画像
 - **无云功能**：无账号、无关注、无发评论（评论只读）、无云端同步；收藏/歌单/历史均为本地 SharedPreferences
 - **播放直链 24 小时过期**：签名链接由服务端签发、有效期约 24h；播放按 `expire_at` 缓存自动重拉，下载前强制重解析，本地已下载文件不受影响
 - **iOS 包未签名**：Release 的 IPA 为未签名包，不能直接安装，需自行签名（如 AltStore / SideStore / 企业签等）后使用
@@ -36,6 +37,7 @@
 - 封面拼装：`{urls[0]}{uri}~{template_prefix}-image.image`（列表小图用 `-15.webp` 变体），实测均可打开
 - 歌词为 KRC 逐字格式：`[startMs,durMs]<off,dur,flag>字…`，解析时剥逐字标签留纯文本行；兼容普通 LRC
 - POST `/luna/*` 用 App UA `Luna/19.1.0 Android` + JSON；GET 用 Web UA；无 Cookie、无签名头
+- 官方推荐流走车机开放平台：GET `open.douyin.com/api/luna/v1/platform/feed/song-tab/`，UA `LunaOpenSDK/1.0.10` + 车机 SDK 公共参数 + 自造 device_id（首启随机生成、持久化复用），offset cursor 分页；其实测内嵌的 GetPlayInfo 直链只下发 medium 一档，故只作推荐数据源，播放仍走 seo 三档
 
 ## 下载与安装
 
@@ -52,4 +54,4 @@
 
 - 版本线 0.1 起（pubspec `0.1.0+1`）；推 `v*` tag 触发 CI：由 tag 解析 `--build-name`（补齐三段，如 `v0.1` → `0.1.0`）+ `--build-number=run_number`，四端构建后自动发 Release；移动端资产名用三段 `BUILD_NAME`，桌面资产用 tag 原文
 - Android 固定签名：keystore 材料在仓库外，四个变量 `ANDROID_KEYSTORE_BASE64 / ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_PASSWORD / ANDROID_KEY_ALIAS` 只进 GitHub Secrets（值不入库）；未配置时 CI 每次临时自签，签名不一致将无法覆盖升级、需卸载重装
-- `flutter analyze` + `flutter test`（fixture 为真实响应裁剪并脱敏（签名参数已替换）：discover/discover_mix/playlist/seo_track）
+- `flutter analyze` + `flutter test`（fixture 为真实响应裁剪并脱敏（签名参数已替换）：discover/discover_mix/playlist/seo_track/platform_feed）

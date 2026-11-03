@@ -1,4 +1,7 @@
+import 'dart:math';
+
 import 'package:dio/dio.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/models.dart';
 
@@ -183,6 +186,21 @@ class QishuiService {
     return tracks;
   }
 
+  /// 车机开放平台推荐流响应（data.items[].entity.media）统一解析
+  static List<Track> parsePlatformItems(Map<String, dynamic> body) {
+    final data = (body['data'] as Map<String, dynamic>?) ?? const {};
+    final tracks = <Track>[];
+    for (final item in (data['items'] as List?) ?? const []) {
+      if (item is! Map<String, dynamic>) continue;
+      final entity = item['entity'] as Map<String, dynamic>?;
+      final media = entity?['media'] as Map<String, dynamic>?;
+      if (media == null) continue;
+      final t = Track.fromPlatformMedia(media);
+      if (t != null) tracks.add(t);
+    }
+    return tracks;
+  }
+
   /// 搜索联想词（全文搜索游客被服务端掏空，本 App 不提供假结果）
   Future<List<String>> sug(String q) async {
     if (q.trim().isEmpty) return const [];
@@ -210,5 +228,101 @@ class QishuiService {
       'device_platform': 'web',
     });
     return SeoTrack.fromJson(body);
+  }
+}
+
+/// 官方推荐流 · 车机开放平台通道（open.douyin.com，LunaOpenSDK）。
+///
+/// 实测结论（2026-11-04，见 QISHUI_API.md §15）：App 本体 feed/song-tab
+/// 游客被设备门拦截（§14），但车机开放平台同一条流无 token/无签名/无 Cookie
+/// 即可取到（游客未个性化版，官方自述「登录后推荐更准」）。device_id 自造，
+/// 首启随机生成并持久化，避免每次启动换号影响流的连续性/去重。
+/// 注意：该通道 player_info 直链只下发 medium 一档，只作推荐数据源，
+/// 播放仍走 [QishuiService.seoTrack] + PlayResolver。
+class PlatformFeedService {
+  static const String host = 'https://open.douyin.com';
+  static const String feedPath = '/api/luna/v1/platform/feed/song-tab/';
+  static const String sdkUa = 'LunaOpenSDK/1.0.10';
+  static const String _kDeviceId = 'platform_device_id';
+
+  final Dio _dio;
+  final String deviceId;
+
+  PlatformFeedService({required this.deviceId, Dio? dio})
+      : _dio = dio ??
+            Dio(BaseOptions(
+              baseUrl: host,
+              connectTimeout: const Duration(seconds: 15),
+              receiveTimeout: const Duration(seconds: 20),
+            ));
+
+  /// 首启随机生成 19 位数字 device_id 并持久化，之后一直复用
+  static Future<String> loadOrCreateDeviceId() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getString(_kDeviceId);
+    if (saved != null && saved.isNotEmpty) return saved;
+    final rnd = Random();
+    final id = '7${List.generate(18, (_) => rnd.nextInt(10)).join()}';
+    await prefs.setString(_kDeviceId, id);
+    return id;
+  }
+
+  /// 车机 SDK 公共参数（固定值 + 设备号 + 时间戳/nonce），纯函数便于单测
+  static Map<String, String> commonParams(
+    String deviceId, {
+    required int timestampSeconds,
+    required int nonce,
+  }) =>
+      {
+        'aid': '765213',
+        'app_id': '765213',
+        'app_name': 'byte_autoservice_lite',
+        'version_code': '100010',
+        'version_name': '1.0.10',
+        'channel': 'bydSong',
+        'sdk_aid': '753999',
+        'caller_name': 'luna_open_sdk',
+        'sdk_version_code': '100000100',
+        'sdk_version_name': '0.0.1',
+        'sdk_channel': 'Test',
+        'vehicle_type': 'BYD',
+        'device_brand': 'BYD',
+        'device_type': 'BYD',
+        'device_platform': 'android',
+        'resolution': '1920x1080',
+        'os_version': '13',
+        'ac': 'wifi',
+        'device_id': deviceId,
+        'did': deviceId,
+        'iid': deviceId,
+        'vehicle_id': 'qishui-$deviceId',
+        '_timestamp': '$timestampSeconds',
+        '_nonce': '$nonce',
+      };
+
+  /// 推荐流分页 → (曲目, hasMore)；cursor 为偏移量（首页 0，之后 += 本页条数），
+  /// 响应无 next_cursor 字段。err_no 非 0 时抛 StateError 供上层回退。
+  Future<(List<Track>, bool)> songTabPage(int cursor, {int count = 20}) async {
+    final resp = await _dio.get<dynamic>(
+      feedPath,
+      queryParameters: {
+        ...commonParams(
+          deviceId,
+          timestampSeconds: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+          nonce: Random().nextInt(1000000000),
+        ),
+        'cursor': '$cursor',
+        'cnt': '$count',
+        'count': '$count',
+      },
+      options: Options(headers: {'User-Agent': sdkUa}),
+    );
+    final body = (resp.data as Map).cast<String, dynamic>();
+    final errNo = body['err_no'];
+    if (errNo != null && errNo != 0) {
+      throw StateError('platform feed err_no=$errNo ${body['err_msg'] ?? ''}');
+    }
+    final data = (body['data'] as Map<String, dynamic>?) ?? const {};
+    return (QishuiService.parsePlatformItems(body), data['has_more'] == true);
   }
 }
