@@ -135,7 +135,13 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                 _selected.clear();
               }),
             ),
-          ] else
+          ] else ...[
+            if (records.isNotEmpty)
+              IconButton(
+                icon: const Icon(Icons.delete_sweep_outlined),
+                tooltip: '清除已完成记录',
+                onPressed: () => _confirmClearRecords(context, downloads),
+              ),
             IconButton(
               icon: const Icon(Icons.checklist),
               tooltip: '多选',
@@ -143,10 +149,47 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                   ? null
                   : () => setState(() => _selectMode = true),
             ),
+          ],
         ],
       ),
       body: isWide(context) ? ConstrainedCenter(child: body) : body,
     );
+  }
+
+  /// 清除已完成记录的二次确认：文案写清「仅清除记录，文件保留」
+  /// 与连带后果（记录没了之后不再认本地文件），用户明确点头才清。
+  Future<void> _confirmClearRecords(
+    BuildContext context,
+    DownloadService downloads,
+  ) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('清除已完成记录'),
+        content: const Text(
+          '仅清除下载记录，已下载的歌曲文件会保留在设备上，不会被删除。\n\n'
+          '清除后，这些歌曲将不再出现在下载管理中，播放时也不再自动使用本地文件。',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('清除记录'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) {
+      await downloads.clearCompletedRecords();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('已清除下载记录（文件保留）')),
+        );
+      }
+    }
   }
 
   static String _tagLabel(String tagStatus) => switch (tagStatus) {

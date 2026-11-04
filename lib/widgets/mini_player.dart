@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../core/utils.dart';
 import '../services/player_service.dart';
 import '../services/play_queue.dart';
 import 'cover_image.dart';
@@ -33,6 +34,15 @@ class MiniPlayer extends StatelessWidget {
     final progress = player.duration.inMilliseconds > 0
         ? player.position.inMilliseconds / player.duration.inMilliseconds
         : 0.0;
+    // 时长显示（悬浮条与桌面通栏同一口径）：总时长常驻在歌手行
+    // 尾部「歌手 · 3:33」；引擎时长优先（实际流长），未就绪时退
+    // 曲目元数据时长；两者都没有就不拼，不显示占位假数。
+    final totalMs = player.duration.inMilliseconds > 0
+        ? player.duration.inMilliseconds
+        : track.durationMs;
+    final artistLine = totalMs > 0
+        ? '${track.artistNames} · ${formatDurationMs(totalMs)}'
+        : track.artistNames;
     return Material(
       color: scheme.surfaceContainer,
       elevation: floating ? 6 : 0,
@@ -74,7 +84,7 @@ class MiniPlayer extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: Theme.of(context).textTheme.titleSmall),
-                        Text(track.artistNames,
+                        Text(artistLine,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: Theme.of(context).textTheme.bodySmall),

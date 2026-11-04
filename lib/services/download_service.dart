@@ -434,4 +434,18 @@ class DownloadService extends ChangeNotifier {
     await _persist();
     notifyListeners();
   }
+
+  /// 清除全部已完成下载记录：**只删记录、不删文件**（与
+  /// [deleteRecords] 的记录+文件一并删相对，UI 文案同口径）。
+  /// 本服务的记录只在下载成功时生成，故 records 即全部已完成
+  /// 记录；进行中的任务（_tasks）不是完成记录，不动。
+  /// 连带后果（如实）：记录清除后 [localPathFor]/[isDownloaded]
+  /// 不再认这些文件——文件仍在磁盘上，但下载管理不再列出，
+  /// 播放也不再优先走本地文件（重新下载会按同名规则再落一份）。
+  Future<void> clearCompletedRecords() async {
+    if (_records.isEmpty) return;
+    _records = [];
+    await _persist();
+    notifyListeners();
+  }
 }

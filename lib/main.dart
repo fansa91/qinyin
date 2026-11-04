@@ -44,6 +44,9 @@ void main() async {
   unawaited(cache.sweepOrphanTemps());
   final player = PlayerService(resolver, settings, library);
   player.localFileFor = downloads.localPathFor;
+  // 全局持久化恢复：装回上次的双会话队列/下标/位置/循环模式，
+  // 保持暂停不自动出声（首次点播放才真正装载声源并定位）。
+  await player.restorePersisted();
   // 系统动态取色：启动时取一次系统调色板主色作种子（取不到则回落默认种子）
   Color? systemSeed;
   try {

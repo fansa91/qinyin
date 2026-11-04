@@ -666,50 +666,76 @@ class _RecommendScreenState extends State<RecommendScreen> {
     // 列表内容以推荐会话为准（隔离口径：不读主队列）；点选走
     // recommendJumpTo——会话占用输出时切歌出声，未占用时只挪
     // 会话下标。徽标与移动端 TrackTile 同一套（音质 + VIP）。
-    final items = player.recommendQueueItems;
     showModalBottomSheet<void>(
       context: context,
       builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const ListTile(title: Text('已加载的推荐曲目')),
-            Flexible(
-              child: ListView.builder(
-                shrinkWrap: true,
-                itemCount: items.length,
-                itemBuilder: (_, i) {
-                  final t = items[i];
-                  return ListTile(
-                    leading: CoverImage(cover: t.cover, width: 40, height: 40),
-                    title: Row(
-                      children: [
-                        Flexible(
-                          child: Text(t.name,
-                              maxLines: 1, overflow: TextOverflow.ellipsis),
-                        ),
-                        if (t.topQuality.isNotEmpty) ...[
-                          const SizedBox(width: 6),
-                          QualityBadge(topQuality: t.topQuality),
-                        ],
-                        if (t.isVip) ...[
-                          const SizedBox(width: 6),
-                          const VipBadge(),
-                        ],
-                      ],
+        // ListenableBuilder 让表头播放/暂停键与选中态随推荐会话
+        // 状态实时同步
+        child: ListenableBuilder(
+          listenable: player,
+          builder: (ctx, _) {
+            final items = player.recommendQueueItems;
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  title: const Text('已加载的推荐曲目'),
+                  // 列表页原本没有暂停入口：表头补推荐会话的播放/
+                  // 暂停键（占用输出时暂停/续播，未占用时抢回输出
+                  // 续播——toggleRecommend 既有语义）
+                  trailing: IconButton.filled(
+                    tooltip: player.recommendPlaying ? '暂停' : '播放',
+                    icon: Icon(
+                      player.recommendLoading
+                          ? Icons.hourglass_top
+                          : player.recommendPlaying
+                              ? Icons.pause
+                              : Icons.play_arrow,
                     ),
-                    subtitle: Text(t.artistNames,
-                        maxLines: 1, overflow: TextOverflow.ellipsis),
-                    selected: i == player.recommendCurrentIndex,
-                    onTap: () {
-                      player.recommendJumpTo(i);
-                      Navigator.pop(ctx);
+                    onPressed:
+                        items.isEmpty ? null : player.toggleRecommend,
+                  ),
+                ),
+                Flexible(
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: items.length,
+                    itemBuilder: (_, i) {
+                      final t = items[i];
+                      return ListTile(
+                        leading:
+                            CoverImage(cover: t.cover, width: 40, height: 40),
+                        title: Row(
+                          children: [
+                            Flexible(
+                              child: Text(t.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis),
+                            ),
+                            if (t.topQuality.isNotEmpty) ...[
+                              const SizedBox(width: 6),
+                              QualityBadge(topQuality: t.topQuality),
+                            ],
+                            if (t.isVip) ...[
+                              const SizedBox(width: 6),
+                              const VipBadge(),
+                            ],
+                          ],
+                        ),
+                        subtitle: Text(t.artistNames,
+                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                        selected: i == player.recommendCurrentIndex,
+                        onTap: () {
+                          player.recommendJumpTo(i);
+                          Navigator.pop(ctx);
+                        },
+                      );
                     },
-                  );
-                },
-              ),
-            ),
-          ],
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -922,6 +948,10 @@ class _RecommendFreshPageState extends State<_RecommendFreshPage> {
               .titleMedium
               ?.copyWith(color: scheme.onSurfaceVariant),
         ),
+        if (fullTrack.albumName.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          AlbumLine(albumName: fullTrack.albumName),
+        ],
         const SizedBox(height: 14),
         // 互动计数（平台/seo 真数字，只读展示，不做假互动）；
         // 评论计数可点：开遮盖式评论抽屉（见 _showComments）

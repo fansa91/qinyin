@@ -2,11 +2,13 @@ import 'dart:async';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/models.dart';
 import 'library_service.dart';
 import 'play_queue.dart';
 import 'play_resolver.dart';
+import 'playback_state.dart';
 import 'settings_service.dart';
 
 /// 播放会话：主会话（首页/搜索/详情/电台/我的/下载等一切普通来源）
@@ -134,6 +136,19 @@ class PlayerService extends ChangeNotifier {
   int _playToken = 0;
   Timer? _progressTimer;
 
+  // ── 全局持久化（播放状态跨重启恢复）──────────────────────────
+  static const String _kPlaybackState = 'playback_state_v1';
+
+  /// 恢复态待装载：冷启动恢复只把状态装回（队列/下标/位置），引擎
+  /// 里并没有声源；首次点播放（[toggle]）时才真正 [_playAt] 装载
+  /// 并 seek 到 [_restoredPositionMs]。任何一次真实 _playAt 都会
+  /// 清掉这个标记（装载已发生，恢复位置让位于实时状态）。
+  bool _restoredNeedsLoad = false;
+  int _restoredPositionMs = 0;
+
+  /// 上次落盘时引擎位置（毫秒），位置节流落盘的比较基准
+  int _lastPersistedPositionMs = -1;
+
   PlayerService(this.resolver, this.settings, this.library) {
     _posSub = _player.onPositionChanged.listen((p) {
       _position = p;
@@ -152,6 +167,13 @@ class PlayerService extends ChangeNotifier {
       final t = currentTrack;
       if (t != null && _playing) {
         library.saveProgress(t.id, _position, _duration);
+        // 全局持久化的位置节流落盘：与上次落盘位置相差 ≥5 秒才写，
+        // 避免高频写盘；结构变化（切歌/切会话/切模式）即时落盘走
+        // _requestPersist 的其他挂点。
+        if ((_position.inMilliseconds - _lastPersistedPositionMs).abs() >=
+            5000) {
+          _requestPersist();
+        }
       }
     });
   }
@@ -219,6 +241,111 @@ class PlayerService extends ChangeNotifier {
       recommendIsActive && preparingLossless;
   String? get recommendError => recommendIsActive ? error : null;
   String? get recommendQuality => recommendIsActive ? currentQuality : null;
+
+  // ── 全局持久化：快照 / 落盘 / 恢复 ────────────────────────────
+
+  /// 当前播放状态快照：活动会话读引擎，非活动会话读自己的 store。
+  /// 只含曲目元数据 + 下标 + 位置 + 循环模式；播放直链不落盘（会
+  /// 过期，恢复后由 PlayResolver 重新解析）；推荐场景的选择由
+  /// PlatformFeedService 独立持久化（推荐页恢复），这里不重复存。
+  PlaybackSnapshot captureSnapshot() {
+    SessionSnapshot? snapOf(
+      List<Track> items,
+      int index,
+      Duration position,
+      bool has,
+    ) =>
+        has && items.isNotEmpty
+            ? SessionSnapshot(
+                items: List.of(items),
+                index: index,
+                positionMs: position.inMilliseconds,
+              )
+            : null;
+    final SessionSnapshot? engineSnap;
+    final SessionSnapshot? storeSnap;
+    if (recommendIsActive) {
+      engineSnap = snapOf(queue.items, queue.index, _position, true);
+      storeSnap = snapOf(
+          _mainStore.items, _mainStore.index, _mainStore.position,
+          _mainStore.hasContent);
+      return PlaybackSnapshot(
+        active: 'recommend',
+        mode: queue.mode,
+        main: storeSnap,
+        recommend: engineSnap,
+      );
+    }
+    engineSnap = snapOf(queue.items, queue.index, _position, true);
+    storeSnap = snapOf(_recommendStore.items, _recommendStore.index,
+        _recommendStore.position, _recommendStore.hasContent);
+    return PlaybackSnapshot(
+      active: 'main',
+      mode: queue.mode,
+      main: engineSnap,
+      recommend: storeSnap,
+    );
+  }
+
+  /// 落盘当前快照（两会话皆空时清掉存档键）。全程吞错：持久化
+  /// 失败绝不影响播放。
+  Future<void> persistPlaybackState() async {
+    try {
+      final snap = captureSnapshot();
+      final prefs = await SharedPreferences.getInstance();
+      if (snap.main == null && snap.recommend == null) {
+        await prefs.remove(_kPlaybackState);
+      } else {
+        await prefs.setString(_kPlaybackState, snap.encode());
+      }
+      _lastPersistedPositionMs = _position.inMilliseconds;
+    } catch (_) {}
+  }
+
+  void _requestPersist() => unawaited(persistPlaybackState());
+
+  /// 冷启动恢复（main() 在 runApp 前调用）：把上次的双会话状态
+  /// 装回来——非活动会话进自己的 store，活动会话进引擎队列并
+  /// 定位到保存位置，**保持暂停、不自动出声**（引擎未装载声源，
+  /// 首次点播放才经 [toggle] 真正装载并 seek 到恢复位置）。
+  /// 数据损坏/版本不兼容 → 静默丢弃、回默认态，不抛。
+  /// 已知取舍：续拉回调是闭包无法落盘，恢复的会话不带 loadMore，
+  /// 队尾不再自动续拉（用户刷新/重选场景/重新点播后恢复如常）；
+  /// 曲目的 platformStreams（平台无损档）不进 Track.toJson，
+  /// 恢复曲目按普通曲目走 seo 解析，无损待新曲目进入后可用。
+  Future<void> restorePersisted() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final snap =
+          PlaybackSnapshot.tryParse(prefs.getString(_kPlaybackState));
+      if (snap == null) return;
+      queue.mode = snap.mode;
+      final activeIsRecommend = snap.active == 'recommend';
+      final inactiveSnap = activeIsRecommend ? snap.main : snap.recommend;
+      if (inactiveSnap != null) {
+        final store =
+            activeIsRecommend ? _mainStore : _recommendStore;
+        store.items = List.of(inactiveSnap.items);
+        store.index = inactiveSnap.index;
+        store.position = Duration(milliseconds: inactiveSnap.positionMs);
+        store.loadMore = null;
+        store.hasContent = true;
+      }
+      final activeSnap = activeIsRecommend ? snap.recommend : snap.main;
+      if (activeSnap == null) return;
+      _activeSession =
+          activeIsRecommend ? PlayerSession.recommend : PlayerSession.main;
+      queueTag = activeIsRecommend ? recommendQueueTag : null;
+      onLoadMore = null;
+      queue.setQueue(List.of(activeSnap.items), activeSnap.index);
+      _position = Duration(milliseconds: activeSnap.positionMs);
+      _duration =
+          Duration(milliseconds: queue.current?.durationMs ?? 0);
+      _restoredNeedsLoad = true;
+      _restoredPositionMs = activeSnap.positionMs;
+      notifyListeners();
+    } catch (_) {}
+  }
 
   // ── 主会话入口 ────────────────────────────────────────────────
 
@@ -290,6 +417,7 @@ class PlayerService extends ChangeNotifier {
     _recommendStore.loadMore = loadMore;
     _recommendStore.position = Duration.zero;
     _recommendStore.hasContent = tracks.isNotEmpty;
+    _requestPersist();
     notifyListeners();
   }
 
@@ -324,6 +452,7 @@ class PlayerService extends ChangeNotifier {
     if (s.index < s.items.length - 1) {
       s.index++;
       s.position = Duration.zero;
+      _requestPersist();
       notifyListeners();
       return;
     }
@@ -334,6 +463,7 @@ class PlayerService extends ChangeNotifier {
     s.items.addAll(more);
     s.index++;
     s.position = Duration.zero;
+    _requestPersist();
     notifyListeners();
   }
 
@@ -347,6 +477,7 @@ class PlayerService extends ChangeNotifier {
     if (s.items.isEmpty || s.index <= 0) return;
     s.index--;
     s.position = Duration.zero;
+    _requestPersist();
     notifyListeners();
   }
 
@@ -361,6 +492,7 @@ class PlayerService extends ChangeNotifier {
     if (index < 0 || index >= s.items.length || index == s.index) return;
     s.index = index;
     s.position = Duration.zero;
+    _requestPersist();
     notifyListeners();
   }
 
@@ -372,6 +504,7 @@ class PlayerService extends ChangeNotifier {
       return;
     }
     _recommendStore.position = pos;
+    _requestPersist();
     notifyListeners();
   }
 
@@ -420,11 +553,17 @@ class PlayerService extends ChangeNotifier {
     final track = queue.current;
     if (track == null) return;
     final token = ++_playToken;
+    // 真实装载发生：恢复态待装载标记作废（恢复位置让位于实时状态）
+    _restoredNeedsLoad = false;
+    _restoredPositionMs = 0;
     _loading = true;
     _preparingLossless = false;
     _error = null;
     _position = Duration.zero;
     _duration = Duration(milliseconds: track.durationMs);
+    // 结构落盘总挂点：建队列/跳播/按钮与自动推进最终都汇到这里，
+    // 新曲目位置为 0（或随后的库内续播点），快照口径如实
+    _requestPersist();
     notifyListeners();
     unawaited(library.addHistory(track));
     try {
@@ -517,10 +656,24 @@ class PlayerService extends ChangeNotifier {
   /// 队列尾部追加（详情页分页加载后同步进队列）
   void appendToQueue(List<Track> more) {
     queue.append(more);
+    _requestPersist();
     notifyListeners();
   }
 
   Future<void> toggle() async {
+    if (_restoredNeedsLoad) {
+      // 冷启动恢复态：引擎只有状态没有声源，首次播放要真正装载
+      // 当前曲，并 seek 到保存位置（覆盖 _playAt 内的库内续播点，
+      // 以全局快照的位置为准——它更新）
+      final resumeMs = _restoredPositionMs;
+      await _playAt(queue.index);
+      if (resumeMs > 0) {
+        try {
+          await _player.seek(Duration(milliseconds: resumeMs));
+        } catch (_) {}
+      }
+      return;
+    }
     try {
       if (_playing) {
         await _player.pause();
@@ -528,12 +681,22 @@ class PlayerService extends ChangeNotifier {
         await _player.resume();
       }
     } catch (_) {}
+    // 暂停/恢复都是位置定格点：即时落盘，保证强杀后位置不回退
+    _requestPersist();
   }
 
   Future<void> seek(Duration pos) async {
+    if (_restoredNeedsLoad) {
+      // 恢复态未装载：只改内存位置与待恢复位置，不碰空引擎
+      _position = pos;
+      _restoredPositionMs = pos.inMilliseconds;
+      notifyListeners();
+      return;
+    }
     try {
       await _player.seek(pos);
     } catch (_) {}
+    _requestPersist();
   }
 
   Future<void> setVolume(double v) async {
@@ -549,11 +712,13 @@ class PlayerService extends ChangeNotifier {
       QueueLoopMode.shuffle => QueueLoopMode.single,
       QueueLoopMode.single => QueueLoopMode.list,
     };
+    _requestPersist();
     notifyListeners();
   }
 
   void setMode(QueueLoopMode m) {
     queue.mode = m;
+    _requestPersist();
     notifyListeners();
   }
 

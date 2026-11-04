@@ -27,7 +27,6 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _refreshingPicks = false;
   String? _mixCursor;
   bool _mixHasMore = false;
-  bool _loadingMore = false;
   final List<Playlist> _playlists = [];
 
   @override
@@ -72,25 +71,6 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     } finally {
       if (mounted) setState(() => _refreshingPicks = false);
-    }
-  }
-
-  Future<void> _loadMorePlaylists() async {
-    if (!_mixHasMore || _loadingMore) return;
-    _loadingMore = true;
-    try {
-      final (more, next, hasMore) = await context
-          .read<QishuiService>()
-          .discoverMix(cursor: _mixCursor ?? '0');
-      setState(() {
-        final seen = _playlists.map((p) => p.id).toSet();
-        _playlists.addAll(more.where((p) => seen.add(p.id)));
-        _mixCursor = next;
-        _mixHasMore = hasMore;
-      });
-    } catch (_) {
-    } finally {
-      _loadingMore = false;
     }
   }
 
@@ -202,22 +182,12 @@ class _HomeScreenState extends State<HomeScreen> {
                       crossAxisSpacing: 14,
                       childAspectRatio: 0.82,
                     ),
+                    // 「加载更多」格已整体删除（用户点名）：首页该板块
+                    // 停在首批内容；续看走板块头「更多」的独立列表页
+                    // （MorePlaylistsScreen 自带分页，不受影响）。
                     delegate: SliverChildBuilderDelegate(
-                      (context, i) {
-                        if (i == _playlists.length) {
-                          return Center(
-                            child: _loadingMore
-                                ? const CircularProgressIndicator()
-                                : TextButton(
-                                    onPressed: _loadMorePlaylists,
-                                    child: const Text('加载更多'),
-                                  ),
-                          );
-                        }
-                        return PlaylistCard(playlist: _playlists[i]);
-                      },
-                      childCount:
-                          _playlists.length + (_mixHasMore ? 1 : 0),
+                      (context, i) => PlaylistCard(playlist: _playlists[i]),
+                      childCount: _playlists.length,
                     ),
                   ),
                 ),

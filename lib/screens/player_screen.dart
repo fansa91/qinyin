@@ -288,6 +288,10 @@ class _FreshContentState extends State<_FreshContent> {
             context,
           ).textTheme.titleMedium?.copyWith(color: scheme.onSurfaceVariant),
         ),
+        if (fullTrack.albumName.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          AlbumLine(albumName: fullTrack.albumName),
+        ],
         const SizedBox(height: 14),
         Row(
           children: [
@@ -662,6 +666,13 @@ class DesktopPlayer extends StatelessWidget {
                           style: Theme.of(context).textTheme.titleMedium
                               ?.copyWith(color: scheme.onSurfaceVariant),
                         ),
+                        if (fullTrack.albumName.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          AlbumLine(
+                            albumName: fullTrack.albumName,
+                            center: true,
+                          ),
+                        ],
                         const SizedBox(height: 10),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -790,40 +801,83 @@ class DesktopPlayer extends StatelessWidget {
     showModalBottomSheet<void>(
       context: context,
       builder: (ctx) => SafeArea(
-        child: ListView.builder(
-          shrinkWrap: true,
-          itemCount: player.queueItems.length,
-          itemBuilder: (_, i) {
-            final t = player.queueItems[i];
-            return ListTile(
-              leading: CoverImage(cover: t.cover, width: 40, height: 40),
-              // 徽标与移动端 TrackTile 同一套（音质 + VIP）
-              title: Row(
-                children: [
-                  Flexible(
-                    child: Text(
-                      t.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+        // ListenableBuilder 让表头播放/暂停键与列表选中态跟随全局
+        // 播放状态实时同步（点表头键不关表、图标原地翻转）
+        child: ListenableBuilder(
+          listenable: player,
+          builder: (ctx, _) {
+            final current = player.currentTrack;
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.queue_music),
+                  title: const Text('播放队列'),
+                  subtitle: current == null
+                      ? null
+                      : Text(
+                          '《${current.name}》- ${current.artistNames}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                  // 队列页原本只能点选跳播、没有暂停入口（用户实报）：
+                  // 表头补与全局状态同步的播放/暂停键
+                  trailing: IconButton.filled(
+                    tooltip: player.playing ? '暂停' : '播放',
+                    icon: Icon(
+                      player.loading
+                          ? Icons.hourglass_top
+                          : player.playing
+                              ? Icons.pause
+                              : Icons.play_arrow,
                     ),
+                    onPressed: current == null ? null : player.toggle,
                   ),
-                  if (t.topQuality.isNotEmpty) ...[
-                    const SizedBox(width: 6),
-                    QualityBadge(topQuality: t.topQuality),
-                  ],
-                  if (t.isVip) ...[const SizedBox(width: 6), const VipBadge()],
-                ],
-              ),
-              subtitle: Text(
-                t.artistNames,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              selected: i == player.currentIndex,
-              onTap: () {
-                player.jumpTo(i);
-                Navigator.pop(ctx);
-              },
+                ),
+                Flexible(
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: player.queueItems.length,
+                    itemBuilder: (_, i) {
+                      final t = player.queueItems[i];
+                      return ListTile(
+                        leading:
+                            CoverImage(cover: t.cover, width: 40, height: 40),
+                        // 徽标与移动端 TrackTile 同一套（音质 + VIP）
+                        title: Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                t.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (t.topQuality.isNotEmpty) ...[
+                              const SizedBox(width: 6),
+                              QualityBadge(topQuality: t.topQuality),
+                            ],
+                            if (t.isVip) ...[
+                              const SizedBox(width: 6),
+                              const VipBadge()
+                            ],
+                          ],
+                        ),
+                        subtitle: Text(
+                          t.artistNames,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        selected: i == player.currentIndex,
+                        onTap: () {
+                          player.jumpTo(i);
+                          Navigator.pop(ctx);
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
             );
           },
         ),
@@ -927,11 +981,55 @@ class LyricsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final player = context.watch<PlayerService>();
     final lines = seo.lyricLines;
-    final idx = player.currentTrack?.id == seo.track.id
-        ? lyricIndexAt(lines, player.position)
-        : -1;
+    final isCurrent = player.currentTrack?.id == seo.track.id;
+    final idx = isCurrent ? lyricIndexAt(lines, player.position) : -1;
+    // 曲目头补专辑名：标题两行——歌名 + 「歌手 · 专辑」（有的才拼）
+    final subtitle = [
+      if (seo.track.artistNames.isNotEmpty) seo.track.artistNames,
+      if (seo.track.albumName.isNotEmpty) seo.track.albumName,
+    ].join(' · ');
     return Scaffold(
-      appBar: AppBar(title: Text(seo.track.name)),
+      appBar: AppBar(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              seo.track.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).appBarTheme.titleTextStyle ??
+                  Theme.of(context).textTheme.titleLarge,
+            ),
+            if (subtitle.isNotEmpty)
+              Text(
+                subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+          ],
+        ),
+        actions: [
+          // 正在播放页补播放/暂停（本页展示的正是当前曲时才有）：
+          // 与全局状态同步，暂停/续播当前曲；非当前曲不显示，
+          // 避免在本页误控别的曲目
+          if (isCurrent)
+            IconButton(
+              tooltip: player.playing ? '暂停' : '播放',
+              icon: Icon(
+                player.loading
+                    ? Icons.hourglass_top
+                    : player.playing
+                        ? Icons.pause
+                        : Icons.play_arrow,
+              ),
+              onPressed: player.toggle,
+            ),
+        ],
+      ),
       body: LyricList(lines: lines, currentIndex: idx),
     );
   }
