@@ -579,6 +579,36 @@ List<LyricLine> parseLyric(String raw) {
   return lines;
 }
 
+/// 把歌词原文转成行级 LRC 文本（写下载标签 LYRICS / ©lyr 用）：
+/// - KRC 逐字格式：经 [parseLyric] 剥逐字标记后逐行输出
+///   `[mm:ss.cc]行文本`（保留行起始时间戳）；
+/// - 原文已是 LRC：同样规范化重排（统一两位厘秒、按时间排序）；
+/// - 纯文本歌词（无任何时间戳行）：原样返回（去首尾空白），
+///   不给无时间信息的行编造时间戳。
+/// 空歌词返回空串。
+String lyricToLrcText(String raw) {
+  final trimmed = raw.trim();
+  if (trimmed.isEmpty) return '';
+  final krcHead = RegExp(r'^\[\d+,\d+\]');
+  final lrcHead = RegExp(r'^\[\d+:\d+(?:\.\d+)?\]');
+  final hasTimedLine = trimmed
+      .split('\n')
+      .any((l) => krcHead.hasMatch(l.trim()) || lrcHead.hasMatch(l.trim()));
+  if (!hasTimedLine) return trimmed;
+  String stamp(Duration d) {
+    final ms = d.inMilliseconds;
+    final mm = (ms ~/ 60000).toString().padLeft(2, '0');
+    final ss = ((ms % 60000) ~/ 1000).toString().padLeft(2, '0');
+    final cc = ((ms % 1000) ~/ 10).toString().padLeft(2, '0');
+    return '[$mm:$ss.$cc]';
+  }
+
+  return parseLyric(trimmed)
+      .where((l) => l.text.trim().isNotEmpty)
+      .map((l) => '${stamp(l.start)}${l.text}')
+      .join('\n');
+}
+
 /// 当前应高亮的歌词行下标（-1 表示尚未开始）
 int lyricIndexAt(List<LyricLine> lines, Duration pos) {
   var idx = -1;

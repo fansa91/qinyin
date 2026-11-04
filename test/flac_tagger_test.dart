@@ -151,6 +151,55 @@ void main() {
     expect(FlacTagger.readTags(tagged)!.fields['TITLE'], '新歌名');
   });
 
+  test('歌词 + 音轨号：LYRICS / TRACKNUMBER / TOTALTRACKS 写入并回读', () {
+    const lrc = '[00:00.06]不敢回看\n[00:02.26]左顾右盼';
+    final tagged = FlacTagger.buildTaggedFlac(
+        syntheticFlac(),
+        MediaTags(
+          title: tags.title,
+          artist: tags.artist,
+          album: tags.album,
+          date: tags.date,
+          lyrics: lrc,
+          trackNumber: 3,
+          trackTotal: 12,
+        ));
+    final read = FlacTagger.readTags(tagged)!;
+    expect(read.fields['LYRICS'], lrc);
+    expect(read.fields['TRACKNUMBER'], '3');
+    expect(read.fields['TOTALTRACKS'], '12');
+    expect(read.fields['TITLE'], '新歌名');
+    expect(audioOf(tagged), audioOf(syntheticFlac()));
+  });
+
+  test('无歌词/无音轨号参数 → 文件里无此三字段', () {
+    final tagged = FlacTagger.buildTaggedFlac(syntheticFlac(), tags);
+    final read = FlacTagger.readTags(tagged)!;
+    expect(read.fields.containsKey('LYRICS'), isFalse);
+    expect(read.fields.containsKey('TRACKNUMBER'), isFalse);
+    expect(read.fields.containsKey('TOTALTRACKS'), isFalse);
+  });
+
+  test('tagFile 落盘：歌词+音轨号回读一致（自检通过才算 ok）', () async {
+    final dir = await Directory.systemTemp.createTemp('flac_tag_lyr');
+    addTearDown(() => dir.delete(recursive: true));
+    final f = File('${dir.path}/t.flac');
+    await f.writeAsBytes(syntheticFlac());
+    final r = await FlacTagger.tagFileDetailed(
+        f.path,
+        const MediaTags(
+          title: '歌',
+          lyrics: '[00:01.00]词',
+          trackNumber: 2,
+          trackTotal: 9,
+        ));
+    expect(r.ok, isTrue, reason: r.error ?? '');
+    final read = FlacTagger.readTags(await f.readAsBytes())!;
+    expect(read.fields['LYRICS'], '[00:01.00]词');
+    expect(read.fields['TRACKNUMBER'], '2');
+    expect(read.fields['TOTALTRACKS'], '9');
+  });
+
   test('非 FLAC 输入抛 FormatException', () {
     expect(
       () => FlacTagger.buildTaggedFlac(

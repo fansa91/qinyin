@@ -54,6 +54,35 @@ void main() {
       expect(r.error, contains('No space left'));
     });
 
+    test('仅文本重试时歌词与音轨号随文本组保留（不被封面拖下水）', () async {
+      MediaTags? retried;
+      Future<({bool ok, String? error})> coverFail(
+          String p, MediaTags t) async {
+        if (t.coverBytes != null) return (ok: false, error: '封面炸了');
+        retried = t;
+        return (ok: true, error: null);
+      }
+
+      final withExtras = MediaTags(
+        title: '歌',
+        artist: '手',
+        album: '辑',
+        date: '2024-01-01',
+        lyrics: '[00:01.00]词',
+        trackNumber: 3,
+        trackTotal: 12,
+        coverBytes: Uint8List.fromList(_cover),
+        coverMime: 'image/jpeg',
+      );
+      final r = await applyDownloadTags('x', withExtras, tagger: coverFail);
+      expect(r.status, 'tagged_text');
+      expect(retried, isNotNull);
+      expect(retried!.lyrics, '[00:01.00]词');
+      expect(retried!.trackNumber, 3);
+      expect(retried!.trackTotal, 12);
+      expect(retried!.coverBytes, isNull);
+    });
+
     test('无封面失败 → 不重试、直接 failed', () async {
       var calls = 0;
       Future<({bool ok, String? error})> counting(

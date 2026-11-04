@@ -176,6 +176,62 @@ void main() {
     expect(Mp4Tagger.readTags(tagged2).containsKey('covr'), isFalse);
   });
 
+  test('歌词 + 音轨号：©lyr / trkn 写入并回读（两种布局）', () {
+    const lrc = '[00:00.06]不敢回看\n[00:02.26]左顾右盼';
+    for (final moovFirst in [true, false]) {
+      final src = syntheticMp4(moovFirst: moovFirst);
+      final tagged = Mp4Tagger.buildTaggedMp4(
+          src,
+          MediaTags(
+            title: '标题A',
+            lyrics: lrc,
+            trackNumber: 3,
+            trackTotal: 12,
+            coverBytes: jpegCover,
+            coverMime: 'image/jpeg',
+          ));
+      final read = Mp4Tagger.readTags(tagged);
+      expect(read['©lyr'], lrc, reason: 'moovFirst=$moovFirst');
+      expect(read['trkn'], (3, 12), reason: 'moovFirst=$moovFirst');
+      expect(read['©nam'], '标题A');
+      expect(payloadOf(tagged), payloadOf(src));
+      expect(Mp4Tagger.firstChunkSample(tagged),
+          Mp4Tagger.firstChunkSample(src));
+    }
+  });
+
+  test('音轨号无总数 → trkn 总数位为 0；无参数 → 无 trkn/©lyr', () {
+    final src = syntheticMp4(moovFirst: true);
+    final onlyNum = Mp4Tagger.buildTaggedMp4(
+        src, const MediaTags(title: 'x', trackNumber: 5));
+    expect(Mp4Tagger.readTags(onlyNum)['trkn'], (5, 0));
+
+    final plain =
+        Mp4Tagger.buildTaggedMp4(src, const MediaTags(title: 'x'));
+    final read = Mp4Tagger.readTags(plain);
+    expect(read.containsKey('trkn'), isFalse);
+    expect(read.containsKey('©lyr'), isFalse);
+  });
+
+  test('tagFileDetailed 落盘：歌词+音轨号自检通过', () async {
+    final dir = await Directory.systemTemp.createTemp('mp4_tag_lyr');
+    addTearDown(() => dir.delete(recursive: true));
+    final f = File('${dir.path}/t.m4a');
+    await f.writeAsBytes(syntheticMp4(moovFirst: false));
+    final r = await Mp4Tagger.tagFileDetailed(
+        f.path,
+        const MediaTags(
+          title: '歌',
+          lyrics: '[00:01.00]词',
+          trackNumber: 2,
+          trackTotal: 9,
+        ));
+    expect(r.ok, isTrue, reason: r.error ?? '');
+    final read = Mp4Tagger.readTags(await f.readAsBytes());
+    expect(read['©lyr'], '[00:01.00]词');
+    expect(read['trkn'], (2, 9));
+  });
+
   test('非 MP4 输入抛 FormatException；tagFile 失败不毁原文件', () async {
     expect(
       () => Mp4Tagger.buildTaggedMp4(

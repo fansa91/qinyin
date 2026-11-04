@@ -8,6 +8,17 @@ class MediaTags {
   final String artist;
   final String album;
   final String? date; // yyyy-MM-dd
+
+  /// 行级 LRC 文本（或纯文本歌词）：FLAC 写 LYRICS、M4A 写 ©lyr；
+  /// 属文本组（与封面解耦，封面失败时随文本一并保留）。
+  /// null/空 = 该曲无歌词数据，不写此字段（不算失败）。
+  final String? lyrics;
+
+  /// 专辑曲序（1 起）与专辑总曲目数：**仅专辑语境**才有值
+  /// （FLAC TRACKNUMBER / TOTALTRACKS、M4A trkn）；
+  /// 其他来源（歌单/推荐/搜索…）一律 null，不写——列表序号不是音轨号。
+  final int? trackNumber;
+  final int? trackTotal;
   final Uint8List? coverBytes;
 
   /// 封面 MIME（image/jpeg / image/png / image/webp）；按字节嗅探得出，
@@ -18,12 +29,20 @@ class MediaTags {
     this.artist = '',
     this.album = '',
     this.date,
+    this.lyrics,
+    this.trackNumber,
+    this.trackTotal,
     this.coverBytes,
     this.coverMime,
   });
 
   bool get hasText =>
-      title.isNotEmpty || artist.isNotEmpty || album.isNotEmpty || date != null;
+      title.isNotEmpty ||
+      artist.isNotEmpty ||
+      album.isNotEmpty ||
+      date != null ||
+      (lyrics != null && lyrics!.isNotEmpty) ||
+      trackNumber != null;
 }
 
 /// 按魔数嗅探图片 MIME；不认识返回 null
@@ -120,6 +139,10 @@ class FlacTagger {
       if (tags.artist.isNotEmpty) 'ARTIST=${tags.artist}',
       if (tags.album.isNotEmpty) 'ALBUM=${tags.album}',
       if (tags.date != null && tags.date!.isNotEmpty) 'DATE=${tags.date}',
+      if (tags.lyrics != null && tags.lyrics!.isNotEmpty)
+        'LYRICS=${tags.lyrics}',
+      if (tags.trackNumber != null) 'TRACKNUMBER=${tags.trackNumber}',
+      if (tags.trackTotal != null) 'TOTALTRACKS=${tags.trackTotal}',
     ];
     final out = BytesBuilder();
     void u32le(int v) => out.add([
@@ -317,6 +340,19 @@ class FlacTagger {
       if (read == null) return (ok: false, error: '自检失败：标签回读失败');
       if (tags.title.isNotEmpty && read.fields['TITLE'] != tags.title) {
         return (ok: false, error: '自检失败：TITLE 回读不一致');
+      }
+      if (tags.lyrics != null &&
+          tags.lyrics!.isNotEmpty &&
+          read.fields['LYRICS'] != tags.lyrics) {
+        return (ok: false, error: '自检失败：LYRICS 回读不一致');
+      }
+      if (tags.trackNumber != null &&
+          read.fields['TRACKNUMBER'] != '${tags.trackNumber}') {
+        return (ok: false, error: '自检失败：TRACKNUMBER 回读不一致');
+      }
+      if (tags.trackTotal != null &&
+          read.fields['TOTALTRACKS'] != '${tags.trackTotal}') {
+        return (ok: false, error: '自检失败：TOTALTRACKS 回读不一致');
       }
       try {
         await tmp.writeAsBytes(tagged, flush: true);

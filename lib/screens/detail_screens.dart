@@ -21,6 +21,11 @@ class _DetailScaffold extends StatelessWidget {
   final VoidCallback? onPlayAll;
   final VoidCallback? onReachEnd;
 
+  /// 专辑语境：为 true 时列表序号即专辑曲序，逐行把
+  /// (序号 1 起, 总曲目数) 传给 TrackTile 写下载标签的音轨号；
+  /// 歌单/歌手等其他详情页保持 false（列表序号不是音轨号，不写）。
+  final bool albumContext;
+
   const _DetailScaffold({
     required this.title,
     required this.cover,
@@ -30,6 +35,7 @@ class _DetailScaffold extends StatelessWidget {
     this.favoriteButton,
     this.onPlayAll,
     this.onReachEnd,
+    this.albumContext = false,
   });
 
   @override
@@ -120,6 +126,8 @@ class _DetailScaffold extends StatelessWidget {
             itemCount: tracks.length,
             itemBuilder: (context, i) => TrackTile(
               track: tracks[i],
+              trackNumber: albumContext ? i + 1 : null,
+              trackTotal: albumContext ? tracks.length : null,
               onTap: () =>
                   context.read<PlayerService>().playQueue(tracks, i),
             ),
@@ -273,6 +281,7 @@ class AlbumDetailScreen extends StatelessWidget {
           meta:
               '${detail.countTracks > 0 ? detail.countTracks : tracks.length} 首 · ${formatEpochSeconds(detail.releaseDate)}',
           tracks: tracks,
+          albumContext: true,
           onPlayAll: () =>
               context.read<PlayerService>().playQueue(tracks, 0),
           favoriteButton: IconButton(

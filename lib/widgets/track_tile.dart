@@ -11,11 +11,16 @@ import 'cover_image.dart';
 import 'track_badges.dart';
 
 /// 歌曲行：封面/歌名/歌手/时长 + 正在播放高亮 + 更多菜单（收藏/下载/加歌单）
+///
+/// [trackNumber]/[trackTotal]：专辑曲序——**仅专辑页**按行传入，
+/// 菜单下载时透传给 DownloadService 写进标签；其他列表不传。
 class TrackTile extends StatelessWidget {
   final Track track;
   final VoidCallback? onTap;
   final int? rank;
   final bool showDownloadAction;
+  final int? trackNumber;
+  final int? trackTotal;
 
   const TrackTile({
     super.key,
@@ -23,6 +28,8 @@ class TrackTile extends StatelessWidget {
     this.onTap,
     this.rank,
     this.showDownloadAction = true,
+    this.trackNumber,
+    this.trackTotal,
   });
 
   @override
@@ -124,7 +131,8 @@ class TrackTile extends StatelessWidget {
                 onTap: () async {
                   Navigator.pop(ctx);
                   try {
-                    await downloads.download(track);
+                    await downloads.download(track,
+                        trackNumber: trackNumber, trackTotal: trackTotal);
                     if (context.mounted) {
                       ScaffoldMessenger.of(context)
                           .showSnackBar(const SnackBar(content: Text('下载完成')));

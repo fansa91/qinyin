@@ -82,11 +82,15 @@ Future<({String status, String error})> applyDownloadTags(
   final full = await tagger(path, tags);
   if (full.ok) return (status: 'tagged', error: '');
   if (tags.coverBytes != null) {
+    // 文本组整体保留（含歌词与音轨号——它们与封面解耦同属文本侧）
     final textOnly = MediaTags(
       title: tags.title,
       artist: tags.artist,
       album: tags.album,
       date: tags.date,
+      lyrics: tags.lyrics,
+      trackNumber: tags.trackNumber,
+      trackTotal: tags.trackTotal,
     );
     final retry = await tagger(path, textOnly);
     if (retry.ok) {
@@ -129,7 +133,8 @@ class DownloadTask {
 }
 
 /// 下载：流式拉所选音质直链落盘 .m4a（不转码），落盘后写 MP4 标签
-/// （标题/歌手/专辑/日期/封面）；无损落盘 .flac 后写 Vorbis 标签。
+/// （标题/歌手/专辑/日期/歌词/封面，专辑语境另加音轨号）；
+/// 无损落盘 .flac 后写 Vorbis 标签（同字段口径）。
 /// 标签写失败保留原文件、只影响记录的标签状态，不算下载失败。
 /// 下载前强制重解析，避免用过期签名链。
 class DownloadService extends ChangeNotifier {
@@ -190,7 +195,14 @@ class DownloadService extends ChangeNotifier {
 
   /// 下载一首；已下过同音质直接返回既有记录。
   /// 音质读「下载音质」（与播放音质独立，未单独设置时跟随播放音质）。
-  Future<DownloadRecord> download(Track track) async {
+  /// [trackNumber]/[trackTotal]：专辑曲序（1 起）与专辑总曲目数，
+  /// **仅专辑页语境传入**，写入标签（FLAC TRACKNUMBER/TOTALTRACKS、
+  /// M4A trkn）；其他来源不传 → 不写音轨号。
+  Future<DownloadRecord> download(
+    Track track, {
+    int? trackNumber,
+    int? trackTotal,
+  }) async {
     final quality = settings.downloadQuality;
     final existing = _records.where((r) => r.trackId == track.id).firstOrNull;
     // 无损优先分支：设置选了无损且该曲带平台无损档 → 解密后落盘 FLAC。
@@ -201,7 +213,8 @@ class DownloadService extends ChangeNotifier {
           localPathFor(track.id) != null) {
         return existing;
       }
-      return _downloadLossless(track);
+      return _downloadLossless(track,
+          trackNumber: trackNumber, trackTotal: trackTotal);
     }
     if (existing != null && existing.quality == quality ||
         existing != null && localPathFor(track.id) != null) {
@@ -260,7 +273,8 @@ class DownloadService extends ChangeNotifier {
     }
     final tagResult = await applyDownloadTags(
       path,
-      await _buildTags(track),
+      await _buildTags(track,
+          trackNumber: trackNumber, trackTotal: trackTotal),
       tagger: Mp4Tagger.tagFileDetailed,
     );
     final size = await File(path).length();
@@ -285,7 +299,16 @@ class DownloadService extends ChangeNotifier {
 
   /// 组装一首曲目的下载标签：文字字段来自 Track；封面取较大图字节并
   /// 嗅探 MIME，取图失败则只写文字字段（不算失败）。
-  Future<MediaTags> _buildTags(Track track) async {
+  /// 歌词：取解析器已缓存的 seo 数据（M4A 下载链路在 resolveForDownload
+  /// 时已把 seo 拉进缓存，此处直接命中；无损链路则用会话内既有缓存）
+  /// ——不为歌词单独新发请求；缓存里没有就跳过歌词字段（不算失败）。
+  /// 歌词原文（KRC 逐字/LRC）统一压成行级 LRC 文本再写入。
+  /// [trackNumber]/[trackTotal] 仅专辑语境由调用点传入。
+  Future<MediaTags> _buildTags(
+    Track track, {
+    int? trackNumber,
+    int? trackTotal,
+  }) async {
     Uint8List? cover;
     String? mime;
     final url = track.coverUrl;
@@ -305,11 +328,16 @@ class DownloadService extends ChangeNotifier {
         // 封面拿不到就只写文字字段
       }
     }
+    final lyricRaw = resolver.cachedSeo(track.id)?.lyricRaw ?? '';
+    final lyrics = lyricRaw.isEmpty ? null : lyricToLrcText(lyricRaw);
     return MediaTags(
       title: track.name,
       artist: track.artistNames,
       album: track.albumName,
       date: track.dateTag,
+      lyrics: (lyrics != null && lyrics.isNotEmpty) ? lyrics : null,
+      trackNumber: trackNumber,
+      trackTotal: trackTotal,
       coverBytes: cover,
       coverMime: mime,
     );
@@ -319,7 +347,11 @@ class DownloadService extends ChangeNotifier {
   /// 再按文件名模板复制进下载目录落盘 .flac，落盘后写 Vorbis 标签
   /// （只写下载副本，不碰解密缓存文件）。
   /// 解密/下载失败抛异常（不静默回落 m4a，避免名实不符）。
-  Future<DownloadRecord> _downloadLossless(Track track) async {
+  Future<DownloadRecord> _downloadLossless(
+    Track track, {
+    int? trackNumber,
+    int? trackTotal,
+  }) async {
     if (_tasks.containsKey(track.id)) {
       throw StateError('正在下载中');
     }
@@ -355,7 +387,8 @@ class DownloadService extends ChangeNotifier {
       await File(flacPath).copy(dest);
       final tagResult = await applyDownloadTags(
         dest,
-        await _buildTags(track),
+        await _buildTags(track,
+            trackNumber: trackNumber, trackTotal: trackTotal),
         tagger: FlacTagger.tagFileDetailed,
       );
       final size = await File(dest).length();

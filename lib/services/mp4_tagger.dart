@@ -4,8 +4,8 @@ import 'dart:typed_data';
 
 import 'flac_tagger.dart' show MediaTags;
 
-/// MP4（.m4a）标签写入：moov/udta/meta/ilst 原子（©nam/©ART/©alb/©day/covr），
-/// 纯 Dart 原子级改写。
+/// MP4（.m4a）标签写入：moov/udta/meta/ilst 原子
+/// （©nam/©ART/©alb/©day/©lyr/trkn/covr），纯 Dart 原子级改写。
 ///
 /// 偏移安全：重建 moov 后若 mdat 位于 moov 之后，mdat 绝对偏移随之变化，
 /// 同步修正全部 stco/co64 条目（+delta）；moov 在 mdat 之后则偏移不变。
@@ -18,8 +18,18 @@ class Mp4Tagger {
   static const _kArtist = '\u00A9ART';
   static const _kAlbum = '\u00A9alb';
   static const _kDay = '\u00A9day';
+  static const _kLyrics = '\u00A9lyr';
+  static const _kTrack = 'trkn';
   static const _kCover = 'covr';
-  static const _ourKeys = {_kTitle, _kArtist, _kAlbum, _kDay, _kCover};
+  static const _ourKeys = {
+    _kTitle,
+    _kArtist,
+    _kAlbum,
+    _kDay,
+    _kLyrics,
+    _kTrack,
+    _kCover,
+  };
   static const _containers = {
     'moov',
     'trak',
@@ -138,6 +148,16 @@ class Mp4Tagger {
   static _Box _textItem(String key, String value) =>
       _Box(key, children: [_dataAtom(1, utf8.encode(value))]);
 
+  /// trkn 原子：data 负载 8 字节——保留(2) + 序号(2, BE) + 总数(2, BE)
+  /// + 保留(2)；data 类型 0（隐式二进制）。总数未知时写 0。
+  static _Box _trackItem(int number, int? total) {
+    final payload = ByteData(8)
+      ..setUint16(2, number)
+      ..setUint16(4, total ?? 0);
+    return _Box(_kTrack,
+        children: [_dataAtom(0, payload.buffer.asUint8List().toList())]);
+  }
+
   static List<_Box> _ourItems(MediaTags tags) {
     return [
       if (tags.title.isNotEmpty) _textItem(_kTitle, tags.title),
@@ -145,6 +165,10 @@ class Mp4Tagger {
       if (tags.album.isNotEmpty) _textItem(_kAlbum, tags.album),
       if (tags.date != null && tags.date!.isNotEmpty)
         _textItem(_kDay, tags.date!),
+      if (tags.lyrics != null && tags.lyrics!.isNotEmpty)
+        _textItem(_kLyrics, tags.lyrics!),
+      if (tags.trackNumber != null)
+        _trackItem(tags.trackNumber!, tags.trackTotal),
       if (tags.coverBytes != null &&
           (tags.coverMime == 'image/jpeg' || tags.coverMime == 'image/png'))
         _Box(_kCover, children: [
@@ -271,7 +295,8 @@ class Mp4Tagger {
     return out.toBytes();
   }
 
-  /// 回读 ilst（供校验与单测）：文本键→字符串，covr→字节数；无 ilst 返回空表
+  /// 回读 ilst（供校验与单测）：文本键→字符串，covr→字节数，
+  /// trkn→(序号, 总数) 记录；无 ilst 返回空表
   static Map<String, Object> readTags(Uint8List bytes) {
     final out = <String, Object>{};
     try {
@@ -292,7 +317,12 @@ class Mp4Tagger {
         }
         final type = ByteData.sublistView(data.leaf!).getUint32(0);
         final payload = Uint8List.sublistView(data.leaf!, 8);
-        if (item.type == _kCover) {
+        if (item.type == _kTrack) {
+          if (payload.length >= 6) {
+            final bd = ByteData.sublistView(payload);
+            out[item.type] = (bd.getUint16(2), bd.getUint16(4));
+          }
+        } else if (item.type == _kCover) {
           out[item.type] = payload.length;
         } else if (type == 1) {
           out[item.type] = utf8.decode(payload, allowMalformed: true);
@@ -349,6 +379,19 @@ class Mp4Tagger {
       }
       if (tags.artist.isNotEmpty && read[_kArtist] != tags.artist) {
         return (ok: false, error: '自检失败：ARTIST 回读不一致');
+      }
+      if (tags.lyrics != null &&
+          tags.lyrics!.isNotEmpty &&
+          read[_kLyrics] != tags.lyrics) {
+        return (ok: false, error: '自检失败：歌词回读不一致');
+      }
+      if (tags.trackNumber != null) {
+        final trkn = read[_kTrack];
+        if (trkn is! (int, int) ||
+            trkn.$1 != tags.trackNumber ||
+            (tags.trackTotal != null && trkn.$2 != tags.trackTotal)) {
+          return (ok: false, error: '自检失败：trkn 回读不一致');
+        }
       }
       final before = firstChunkSample(src);
       final after = firstChunkSample(tagged);
