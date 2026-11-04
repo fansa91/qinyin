@@ -10,6 +10,7 @@ class ThemePreset {
 /// 设置：默认音质 / 下载 / 主题。SharedPreferences 持久化。
 class SettingsService extends ChangeNotifier {
   static const _kQuality = 'default_quality';
+  static const _kDownloadQuality = 'download_quality';
   static const _kThemeMode = 'theme_mode';
   static const _kDynamicColor = 'dynamic_color';
   static const _kSeed = 'theme_seed';
@@ -42,6 +43,10 @@ class SettingsService extends ChangeNotifier {
   static const String defaultFilenameFormat = '{artist} - {title}';
 
   String _quality = 'higher';
+
+  /// 下载音质（与播放音质独立）；null = 未单独设置过，跟随播放音质
+  /// （老用户无此键时的默认口径：下载沿用既有播放音质现状）。
+  String? _downloadQuality;
   ThemeMode _themeMode = ThemeMode.system;
   bool _dynamicColor = true;
   int _seedValue = defaultSeedValue;
@@ -50,6 +55,12 @@ class SettingsService extends ChangeNotifier {
   double _volume = 1.0;
 
   String get defaultQuality => _quality;
+
+  /// 下载实际使用的音质：单独设置过用设置值，否则跟随播放音质
+  String get downloadQuality => _downloadQuality ?? _quality;
+
+  /// 是否已单独设置过下载音质（设置页展示用）
+  bool get hasDownloadQuality => _downloadQuality != null;
   ThemeMode get themeMode => _themeMode;
   bool get dynamicColor => _dynamicColor;
   int get seedValue => _seedValue;
@@ -65,6 +76,8 @@ class SettingsService extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     _quality = prefs.getString(_kQuality) ?? 'higher';
     if (!qualityOptions.contains(_quality)) _quality = 'higher';
+    final dq = prefs.getString(_kDownloadQuality);
+    _downloadQuality = qualityOptions.contains(dq) ? dq : null;
     _themeMode = ThemeMode.values[prefs.getInt(_kThemeMode) ?? 0];
     _dynamicColor = prefs.getBool(_kDynamicColor) ?? true;
     _seedValue = prefs.getInt(_kSeed) ?? defaultSeedValue;
@@ -85,6 +98,12 @@ class SettingsService extends ChangeNotifier {
   Future<void> setQuality(String q) async {
     _quality = q;
     await _save(_kQuality, q);
+    notifyListeners();
+  }
+
+  Future<void> setDownloadQuality(String q) async {
+    _downloadQuality = q;
+    await _save(_kDownloadQuality, q);
     notifyListeners();
   }
 

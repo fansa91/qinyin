@@ -15,6 +15,7 @@ import '../services/player_service.dart';
 import '../services/settings_service.dart';
 import '../widgets/cover_image.dart';
 import '../widgets/fresh_pager.dart';
+import '../widgets/seek_bar.dart';
 
 /// 播放页：移动端为新鲜模式（纵向 PageView 上下滑切歌），
 /// 桌面 ≥900 为官方双栏（左封面 + 右歌词列）。
@@ -109,7 +110,9 @@ class _FreshPage extends StatelessWidget {
   }
 }
 
-class _FreshContent extends StatelessWidget {
+/// 新鲜模式单页内容：封面/歌曲信息/互动排 + 歌词·评论切换页签 + 进度条 + 底键。
+/// 歌词与评论在同一区域二选一切换（页签），不再跳独立页。
+class _FreshContent extends StatefulWidget {
   final Track track;
   final SeoTrack? seo;
   final bool isCurrent;
@@ -117,7 +120,17 @@ class _FreshContent extends StatelessWidget {
       {required this.track, required this.seo, required this.isCurrent});
 
   @override
+  State<_FreshContent> createState() => _FreshContentState();
+}
+
+class _FreshContentState extends State<_FreshContent> {
+  int _tab = 0; // 0 歌词 1 评论
+
+  @override
   Widget build(BuildContext context) {
+    final track = widget.track;
+    final seo = widget.seo;
+    final isCurrent = widget.isCurrent;
     final player = context.watch<PlayerService>();
     final library = context.watch<LibraryService>();
     final scheme = Theme.of(context).colorScheme;
@@ -125,14 +138,6 @@ class _FreshContent extends StatelessWidget {
     final lines = seo?.lyricLines ?? const <LyricLine>[];
     final currentLineIndex =
         isCurrent ? lyricIndexAt(lines, player.position) : -1;
-    final currentLyric = lines.isEmpty
-        ? ''
-        : lines[(currentLineIndex < 0 ? 0 : currentLineIndex)
-                .clamp(0, lines.length - 1)]
-            .text;
-    final progress = player.duration.inMilliseconds > 0
-        ? player.position.inMilliseconds / player.duration.inMilliseconds
-        : 0.0;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
       child: Column(
@@ -157,33 +162,17 @@ class _FreshContent extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           GestureDetector(
-            onTap: seo == null
-                ? null
-                : () => Navigator.push(
-                      context,
-                      MaterialPageRoute<void>(
-                        builder: (_) => LyricsScreen(seo: seo!),
-                      ),
-                    ),
+            // 点封面切到歌词页签（原跳独立歌词页，已改页签形态）
+            onTap: () => setState(() => _tab = 0),
             child: CoverImage(
               cover: fullTrack.cover,
               width: double.infinity,
-              height: MediaQuery.sizeOf(context).height * 0.38,
+              height: MediaQuery.sizeOf(context).height * 0.30,
               radius: 16,
               small: false,
             ),
           ),
-          const SizedBox(height: 16),
-          Text(
-            currentLyric,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context)
-                .textTheme
-                .bodyMedium
-                ?.copyWith(color: scheme.onSurfaceVariant),
-          ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 12),
           Row(
             children: [
               Expanded(
@@ -221,12 +210,7 @@ class _FreshContent extends StatelessWidget {
                 label: formatCount(fullTrack.countComment ?? 0),
                 onTap: seo == null
                     ? null
-                    : () => Navigator.push(
-                          context,
-                          MaterialPageRoute<void>(
-                            builder: (_) => CommentsScreen(seo: seo!),
-                          ),
-                        ),
+                    : () => setState(() => _tab = 1),
               ),
               const SizedBox(width: 18),
               _StatButton(
@@ -265,24 +249,38 @@ class _FreshContent extends StatelessWidget {
                 ],
               ),
             ),
-          const Spacer(),
-          if (isCurrent) ...[
-            Slider(
-              value: progress.clamp(0, 1).toDouble(),
-              onChanged: (v) => player.seek(
-                  Duration(milliseconds: (v * player.duration.inMilliseconds).round())),
+          const SizedBox(height: 12),
+          // 歌词 / 评论切换页签（同一区域二选一）
+          SegmentedButton<int>(
+            segments: const [
+              ButtonSegment(value: 0, icon: Icon(Icons.lyrics_outlined, size: 16), label: Text('歌词')),
+              ButtonSegment(value: 1, icon: Icon(Icons.mode_comment_outlined, size: 16), label: Text('评论')),
+            ],
+            selected: {_tab},
+            onSelectionChanged: (s) => setState(() => _tab = s.first),
+            style: const ButtonStyle(
+              visualDensity: VisualDensity.compact,
             ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(formatDurationMs(player.position.inMilliseconds),
-                    style: Theme.of(context).textTheme.bodySmall),
-                Text(formatDurationMs(player.duration.inMilliseconds),
-                    style: Theme.of(context).textTheme.bodySmall),
-              ],
-            ),
-          ] else
-            const SizedBox(height: 48),
+          ),
+          const SizedBox(height: 4),
+          Expanded(
+            child: _tab == 0
+                ? _LyricList(
+                    lines: lines,
+                    currentIndex: currentLineIndex,
+                    userScrollable: false,
+                  )
+                : CommentsList(comments: seo?.comments ?? const []),
+          ),
+          if (isCurrent)
+            SeekBar(
+              position: player.position,
+              duration: player.duration,
+              onSeek: player.seek,
+              showTimes: true,
+            )
+          else
+            const SizedBox(height: 76),
           const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -541,7 +539,34 @@ class DesktopPlayer extends StatelessWidget {
                             ?.copyWith(color: scheme.onSurfaceVariant),
                       ),
                     ),
-                  Expanded(child: _LyricList(lines: lines, currentIndex: idx)),
+                  // 歌词 / 评论切换页签（与移动端同一口径）
+                  Expanded(
+                    child: DefaultTabController(
+                      length: 2,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const TabBar(
+                            isScrollable: true,
+                            tabAlignment: TabAlignment.start,
+                            tabs: [
+                              Tab(text: '歌词'),
+                              Tab(text: '评论'),
+                            ],
+                          ),
+                          Expanded(
+                            child: TabBarView(
+                              children: [
+                                _LyricList(lines: lines, currentIndex: idx),
+                                CommentsList(
+                                    comments: seo?.comments ?? const []),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -588,11 +613,18 @@ class DesktopPlayer extends StatelessWidget {
   }
 }
 
-/// 歌词滚动列表（当前行高亮 + 自动滚动）
+/// 歌词滚动列表（当前行高亮 + 自动滚动）。
+/// [userScrollable]=false 时禁用手动滚动（新鲜模式页内嵌用法：纵向手势
+/// 要留给 PageView 切歌，不能被歌词列表抢走；自动滚动不受影响）。
 class _LyricList extends StatefulWidget {
   final List<LyricLine> lines;
   final int currentIndex;
-  const _LyricList({required this.lines, required this.currentIndex});
+  final bool userScrollable;
+  const _LyricList({
+    required this.lines,
+    required this.currentIndex,
+    this.userScrollable = true,
+  });
 
   @override
   State<_LyricList> createState() => _LyricListState();
@@ -605,12 +637,18 @@ class _LyricListState extends State<_LyricList> {
   void didUpdateWidget(_LyricList old) {
     super.didUpdateWidget(old);
     if (widget.currentIndex != old.currentIndex && widget.currentIndex >= 0) {
-      final target = (widget.currentIndex * 44.0 - 120).clamp(0, double.infinity);
-      _controller.animateTo(
-        target.toDouble(),
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOut,
-      );
+      // 等一帧再滚：PageView 页内初建/切换时 controller 可能尚未挂载，
+      // 直接 animateTo 会抛 'ScrollController not attached'
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_controller.hasClients) return;
+        final target =
+            (widget.currentIndex * 44.0 - 120).clamp(0, double.infinity);
+        _controller.animateTo(
+          target.toDouble(),
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      });
     }
   }
 
@@ -628,6 +666,8 @@ class _LyricListState extends State<_LyricList> {
     }
     return ListView.builder(
       controller: _controller,
+      physics:
+          widget.userScrollable ? null : const NeverScrollableScrollPhysics(),
       itemCount: widget.lines.length,
       itemBuilder: (context, i) {
         final active = i == widget.currentIndex;
@@ -672,6 +712,58 @@ class LyricsScreen extends StatelessWidget {
   }
 }
 
+/// 评论列表（只读）：播放页歌词/评论页签与独立评论页共用同一份实现。
+/// 顶部带游客只读提示行。
+class CommentsList extends StatelessWidget {
+  final List<SeoComment> comments;
+  const CommentsList({super.key, required this.comments});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        const ListTile(
+          dense: true,
+          leading: Icon(Icons.info_outline, size: 18),
+          title: Text('游客模式仅可查看评论，不可发表/点赞',
+              style: TextStyle(fontSize: 12)),
+        ),
+        const Divider(height: 1),
+        Expanded(
+          child: comments.isEmpty
+              ? const Center(child: Text('暂无评论'))
+              : ListView.separated(
+                  itemCount: comments.length,
+                  separatorBuilder: (_, _) => const Divider(height: 1),
+                  itemBuilder: (context, i) {
+                    final c = comments[i];
+                    return ListTile(
+                      title: Row(
+                        children: [
+                          Expanded(
+                            child: Text(c.nickname,
+                                style:
+                                    Theme.of(context).textTheme.titleSmall),
+                          ),
+                          const Icon(Icons.favorite, size: 14),
+                          const SizedBox(width: 2),
+                          Text(formatCount(c.diggCount),
+                              style: Theme.of(context).textTheme.bodySmall),
+                        ],
+                      ),
+                      subtitle: Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(c.content),
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+}
+
 class CommentsScreen extends StatelessWidget {
   final SeoTrack seo;
   const CommentsScreen({super.key, required this.seo});
@@ -680,44 +772,7 @@ class CommentsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('评论')),
-      body: Column(
-        children: [
-          const ListTile(
-            leading: Icon(Icons.info_outline),
-            title: Text('游客模式仅可查看评论，不可发表/点赞'),
-          ),
-          const Divider(),
-          Expanded(
-            child: seo.comments.isEmpty
-                ? const Center(child: Text('暂无评论'))
-                : ListView.separated(
-                    itemCount: seo.comments.length,
-                    separatorBuilder: (_, _) => const Divider(height: 1),
-                    itemBuilder: (context, i) {
-                      final c = seo.comments[i];
-                      return ListTile(
-                        title: Row(
-                          children: [
-                            Expanded(
-                              child: Text(c.nickname,
-                                  style: Theme.of(context).textTheme.titleSmall),
-                            ),
-                            const Icon(Icons.favorite, size: 14),
-                            const SizedBox(width: 2),
-                            Text(formatCount(c.diggCount),
-                                style: Theme.of(context).textTheme.bodySmall),
-                          ],
-                        ),
-                        subtitle: Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Text(c.content),
-                        ),
-                      );
-                    },
-                  ),
-          ),
-        ],
-      ),
+      body: CommentsList(comments: seo.comments),
     );
   }
 }

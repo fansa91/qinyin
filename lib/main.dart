@@ -1,7 +1,9 @@
 import 'package:dynamic_color/dynamic_color.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'core/playback_shortcuts.dart';
 import 'core/responsive.dart';
 import 'core/theme.dart';
 import 'screens/downloads_screen.dart';
@@ -93,6 +95,13 @@ class QinyinApp extends StatelessWidget {
           final seed = settings.dynamicColor
               ? (systemSeed ?? settings.seedColor)
               : settings.presetSeedColor;
+          final isDesktop = switch (defaultTargetPlatform) {
+            TargetPlatform.windows ||
+            TargetPlatform.macOS ||
+            TargetPlatform.linux =>
+              true,
+            _ => false,
+          };
           return MaterialApp(
             title: '沁音',
             debugShowCheckedModeBanner: false,
@@ -100,6 +109,28 @@ class QinyinApp extends StatelessWidget {
             darkTheme:
                 buildTheme(brightness: Brightness.dark, seedColor: seed),
             themeMode: settings.themeMode,
+            // 桌面键盘切歌/播放暂停（见 playback_shortcuts.dart 的避让说明）：
+            // 叠加在默认快捷键之上，移动端不装。
+            shortcuts: isDesktop
+                ? {
+                    ...WidgetsApp.defaultShortcuts,
+                    ...playbackShortcutActivators(),
+                  }
+                : null,
+            actions: isDesktop
+                ? {
+                    ...WidgetsApp.defaultActions,
+                    NextTrackIntent: CallbackAction<NextTrackIntent>(
+                      onInvoke: (_) => player.next(),
+                    ),
+                    PrevTrackIntent: CallbackAction<PrevTrackIntent>(
+                      onInvoke: (_) => player.prev(),
+                    ),
+                    TogglePlayIntent: CallbackAction<TogglePlayIntent>(
+                      onInvoke: (_) => player.toggle(),
+                    ),
+                  }
+                : null,
             home: const AppShell(),
             routes: {
               '/player': (_) => const PlayerScreen(),
@@ -124,6 +155,18 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   int _currentIndex = 0; // 0 首页 1 推荐 2 下载 3 我的
 
+  /// 「我的」嵌入页的目标页签（0 收藏歌曲 1 收藏歌单/专辑 3 历史播放）：
+  /// 桌面侧栏三入口（我喜欢的音乐 / 我的收藏 / 历史播放）不再跳独立页，
+  /// 改为切到主框架「我的」页并定位到对应页签，与其他主页面同一形态。
+  int _libraryTab = 0;
+
+  void _goLibrary(int tab) {
+    setState(() {
+      _libraryTab = tab;
+      _currentIndex = 3;
+    });
+  }
+
   List<Widget> get _pages => [
         const HomeScreen(),
         RecommendScreen(
@@ -132,7 +175,11 @@ class _AppShellState extends State<AppShell> {
           onGoMine: () => setState(() => _currentIndex = 3),
         ),
         const DownloadsScreen(),
-        const LibraryScreen(),
+        LibraryScreen(
+          // 页签变化时重建 DefaultTabController 使 initialTab 生效
+          key: ValueKey('library-$_libraryTab'),
+          initialTab: _libraryTab,
+        ),
       ];
 
   void _openPlayer() {
@@ -144,9 +191,17 @@ class _AppShellState extends State<AppShell> {
   @override
   Widget build(BuildContext context) {
     final wc = windowClassOf(context);
-    if (wc == WindowClass.expanded) return _buildExpanded();
-    if (wc == WindowClass.medium) return _buildMedium();
-    return _buildCompact();
+    final Widget child;
+    if (wc == WindowClass.expanded) {
+      child = _buildExpanded();
+    } else if (wc == WindowClass.medium) {
+      child = _buildMedium();
+    } else {
+      child = _buildCompact();
+    }
+    // 桌面快捷键需要焦点链有落点：壳层先天 autofocus，用户点击控件后
+    // 焦点自然转移（输入框/按钮/Slider 的避让由焦点链顺序保证）。
+    return Focus(autofocus: true, child: child);
   }
 
   Widget _buildCompact() {
@@ -276,24 +331,14 @@ class _AppShellState extends State<AppShell> {
                       _SideItem(
                         icon: Icons.favorite_border,
                         label: '我喜欢的音乐',
-                        selected: false,
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute<void>(
-                            builder: (_) => const LibraryScreen(initialTab: 0),
-                          ),
-                        ),
+                        selected: _currentIndex == 3 && _libraryTab == 0,
+                        onTap: () => _goLibrary(0),
                       ),
                       _SideItem(
                         icon: Icons.history,
                         label: '历史播放',
-                        selected: false,
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute<void>(
-                            builder: (_) => const LibraryScreen(initialTab: 3),
-                          ),
-                        ),
+                        selected: _currentIndex == 3 && _libraryTab == 3,
+                        onTap: () => _goLibrary(3),
                       ),
                       _SideItem(
                         icon: Icons.download_outlined,
@@ -325,13 +370,8 @@ class _AppShellState extends State<AppShell> {
                       _SideItem(
                         icon: Icons.collections_bookmark_outlined,
                         label: '我的收藏',
-                        selected: false,
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute<void>(
-                            builder: (_) => const LibraryScreen(initialTab: 1),
-                          ),
-                        ),
+                        selected: _currentIndex == 3 && _libraryTab == 1,
+                        onTap: () => _goLibrary(1),
                       ),
                       const Divider(height: 24),
                       _SideItem(

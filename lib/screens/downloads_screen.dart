@@ -30,9 +30,36 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
               for (final entry in downloads.tasks.entries)
                 ListTile(
                   leading: const Icon(Icons.downloading),
-                  title: const Text('正在下载…'),
-                  subtitle: LinearProgressIndicator(
-                    value: entry.value.progress >= 0 ? entry.value.progress : null,
+                  title: Text(
+                    entry.value.title.isEmpty
+                        ? '正在下载…'
+                        : entry.value.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (entry.value.artist.isNotEmpty ||
+                          entry.value.format.isNotEmpty)
+                        Text(
+                          [
+                            if (entry.value.artist.isNotEmpty)
+                              entry.value.artist,
+                            if (entry.value.format.isNotEmpty)
+                              entry.value.format,
+                          ].join(' · '),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      const SizedBox(height: 4),
+                      LinearProgressIndicator(
+                        value: entry.value.progress >= 0
+                            ? entry.value.progress
+                            : null,
+                      ),
+                    ],
                   ),
                   trailing: IconButton(
                     icon: const Icon(Icons.close),
@@ -56,7 +83,13 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                   title:
                       Text(r.title, maxLines: 1, overflow: TextOverflow.ellipsis),
                   subtitle: Text(
-                      '${r.artist} · ${r.quality} · ${(r.size / 1024 / 1024).toStringAsFixed(1)} MB · ${r.path.endsWith('.flac') ? 'FLAC' : 'M4A'} · ${_tagLabel(r.tagStatus)}'),
+                    [
+                      '${r.artist} · ${r.quality} · ${(r.size / 1024 / 1024).toStringAsFixed(1)} MB · ${r.formatLabel} · ${_tagLabel(r.tagStatus)}',
+                      if (r.tagError.isNotEmpty) '标签问题：${r.tagError}',
+                    ].join('\n'),
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   onTap: _selectMode
                       ? () => setState(() {
                             if (!_selected.remove(r.trackId)) {
@@ -118,6 +151,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
 
   static String _tagLabel(String tagStatus) => switch (tagStatus) {
         'tagged' => '已写标签',
+        'tagged_text' => '已写标签（无封面）',
         'failed' => '标签写入失败',
         _ => '未写标签',
       };

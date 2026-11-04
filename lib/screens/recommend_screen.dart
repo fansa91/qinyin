@@ -86,36 +86,83 @@ class _RecommendScreenState extends State<RecommendScreen> {
     if (!widget.active) _enterHandled = false;
   }
 
+  /// 构造一个全新的分页器（初始构造与「刷新换一批」共用同一条路，
+  /// 保证刷新是真重建而不是假动作）。
+  Future<RecommendPager> _createPager() async {
+    final service = context.read<QishuiService>();
+    // 主源（车机开放平台官方推荐流）不依赖 homeFeed：
+    // homeFeed 只为回退源提供电台与歌单快照，失败时单独兜底为空
+    final deviceId = await PlatformFeedService.loadOrCreateDeviceId();
+    final platform = PlatformFeedService(deviceId: deviceId);
+    HomeFeed? feed;
+    try {
+      feed = await service.homeFeed();
+    } catch (_) {
+      feed = null;
+    }
+    return RecommendPager(
+      fetchPlatformPage: (cursor) => platform.songTabPage(cursor),
+      fetchRelated: service.relatedTracks,
+      fetchPlaylistList: (cursor) => service.discoverMix(cursor: cursor),
+      fetchPlaylistTracks: (id, {cursor}) =>
+          service.playlistDetail(id, cursor: cursor),
+      fetchRadioPage: service.radioTracksPage,
+      radioIds: feed?.radios.map((r) => r.id).toList() ?? const [],
+    )..prime(
+        playlists: feed?.playlists ?? const [],
+        mixCursor: feed?.mixCursor,
+        mixHasMore: feed?.mixHasMore ?? false,
+      );
+  }
+
   Future<void> _init() async {
     try {
-      final service = context.read<QishuiService>();
-      // 主源（车机开放平台官方推荐流）不依赖 homeFeed：
-      // homeFeed 只为回退源提供电台与歌单快照，失败时单独兜底为空
-      final deviceId = await PlatformFeedService.loadOrCreateDeviceId();
-      final platform = PlatformFeedService(deviceId: deviceId);
-      HomeFeed? feed;
-      try {
-        feed = await service.homeFeed();
-      } catch (_) {
-        feed = null;
-      }
-      final pager = RecommendPager(
-        fetchPlatformPage: (cursor) => platform.songTabPage(cursor),
-        fetchRelated: service.relatedTracks,
-        fetchPlaylistList: (cursor) => service.discoverMix(cursor: cursor),
-        fetchPlaylistTracks: (id, {cursor}) =>
-            service.playlistDetail(id, cursor: cursor),
-        fetchRadioPage: service.radioTracksPage,
-        radioIds: feed?.radios.map((r) => r.id).toList() ?? const [],
-      )..prime(
-          playlists: feed?.playlists ?? const [],
-          mixCursor: feed?.mixCursor,
-          mixHasMore: feed?.mixHasMore ?? false,
-        );
-      _pager = pager;
+      _pager = await _createPager();
       if (mounted) setState(() => _initError = null);
     } catch (e) {
       if (mounted) setState(() => _initError = '加载失败，请检查网络');
+    }
+  }
+
+  bool _refreshing = false;
+
+  /// 刷新换一批：新建分页器重新拉第一批，成功才换队列；
+  /// 失败保留当前队列与已加载列表不动，只提示。刷新是用户显式动作，
+  /// 允许接管队列（与进页「不打断优先」不冲突）。
+  Future<void> _refresh() async {
+    if (_refreshing || _starting) return;
+    _refreshing = true;
+    if (mounted) setState(() {});
+    try {
+      final pager = await _createPager();
+      var first = await pager.nextPage();
+      // 空批但还有后续时多翻两页，避免把空列表当新一批交付
+      for (var i = 0; i < 2 && first.isEmpty && pager.hasMore; i++) {
+        first = await pager.nextPage();
+      }
+      if (first.isEmpty) {
+        throw StateError('推荐流返回空');
+      }
+      if (!mounted) return;
+      _pager = pager;
+      _tracks
+        ..clear()
+        ..addAll(first);
+      await context.read<PlayerService>().playQueue(
+            List.of(_tracks),
+            0,
+            loadMore: _fetchNext,
+            tag: PlayerService.recommendQueueTag,
+          );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('刷新失败，已保留当前内容')),
+        );
+      }
+    } finally {
+      _refreshing = false;
+      if (mounted) setState(() {});
     }
   }
 
@@ -187,7 +234,15 @@ class _RecommendScreenState extends State<RecommendScreen> {
     final player = context.watch<PlayerService>();
     final enter = _decide(player);
     if (enter == RecommendEnter.showPager) {
-      if (isExpanded(context)) return const DesktopPlayer();
+      if (isExpanded(context)) {
+        // 桌面双栏播放形态之上保留推荐页头（刷新/列表/搜索入口不丢）
+        return Column(
+          children: [
+            _header(context),
+            const Expanded(child: DesktopPlayer()),
+          ],
+        );
+      }
       return _buildSwipe(context);
     }
     if (enter == RecommendEnter.showGate) {
@@ -221,6 +276,17 @@ class _RecommendScreenState extends State<RecommendScreen> {
                 ),
               ],
             ),
+          ),
+          IconButton(
+            tooltip: '刷新推荐（换一批）',
+            icon: _refreshing
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.refresh),
+            onPressed: _refreshing ? null : _refresh,
           ),
           IconButton(
             tooltip: '已加载列表',

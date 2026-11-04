@@ -277,45 +277,73 @@ class FlacTagger {
   }
 
   /// 给文件写标签：成功返回 true；失败保留原文件、返回 false（不抛）。
-  static Future<bool> tagFile(String path, MediaTags tags) async {
+  static Future<bool> tagFile(String path, MediaTags tags) async =>
+      (await tagFileDetailed(path, tags)).ok;
+
+  /// [tagFile] 的详细版：失败时带回具体原因（供下载记录落盘展示，
+  /// 用户可直接照着回报，不再只有一个「失败」）。
+  static Future<({bool ok, String? error})> tagFileDetailed(
+      String path, MediaTags tags) async {
     final tmp = File('$path.qytag');
     try {
-      final src = await File(path).readAsBytes();
-      final tagged = buildTaggedFlac(src, tags);
+      final Uint8List src;
+      try {
+        src = await File(path).readAsBytes();
+      } catch (e) {
+        return (ok: false, error: '读取源文件失败：$e');
+      }
+      final Uint8List tagged;
+      try {
+        tagged = buildTaggedFlac(src, tags);
+      } catch (e) {
+        return (ok: false, error: '构建标签失败：$e');
+      }
       // 落盘前自检：STREAMINFO 与音频段必须与源逐字节一致，标签可回读
       final srcParts = _parse(src);
       final newParts = _parse(tagged);
-      if (!_bytesEqual(srcParts.streamInfo, newParts.streamInfo)) return false;
+      if (!_bytesEqual(srcParts.streamInfo, newParts.streamInfo)) {
+        return (ok: false, error: '自检失败：STREAMINFO 不一致');
+      }
       if (src.length - srcParts.audioStart !=
           tagged.length - newParts.audioStart) {
-        return false;
+        return (ok: false, error: '自检失败：音频段长度不一致');
       }
       for (var i = 0; i < src.length - srcParts.audioStart; i++) {
         if (src[srcParts.audioStart + i] != tagged[newParts.audioStart + i]) {
-          return false;
+          return (ok: false, error: '自检失败：音频段字节不一致');
         }
       }
       final read = readTags(tagged);
-      if (read == null) return false;
+      if (read == null) return (ok: false, error: '自检失败：标签回读失败');
       if (tags.title.isNotEmpty && read.fields['TITLE'] != tags.title) {
-        return false;
+        return (ok: false, error: '自检失败：TITLE 回读不一致');
       }
-      await tmp.writeAsBytes(tagged, flush: true);
-      // 校验临时文件可读且大小相符后再替换
-      if (await tmp.length() != tagged.length) return false;
+      try {
+        await tmp.writeAsBytes(tagged, flush: true);
+      } catch (e) {
+        return (ok: false, error: '写临时文件失败：$e');
+      }
+      // 校验临时文件大小相符后再替换
+      if (await tmp.length() != tagged.length) {
+        return (ok: false, error: '临时文件大小不符');
+      }
       try {
         await tmp.rename(path);
       } on FileSystemException {
-        final dest = File(path);
-        if (await dest.exists()) await dest.delete();
-        await tmp.rename(path);
+        try {
+          final dest = File(path);
+          if (await dest.exists()) await dest.delete();
+          await tmp.rename(path);
+        } catch (e) {
+          return (ok: false, error: '替换原文件失败：$e');
+        }
       }
-      return true;
-    } catch (_) {
+      return (ok: true, error: null);
+    } catch (e) {
       try {
         if (await tmp.exists()) await tmp.delete();
       } catch (_) {}
-      return false;
+      return (ok: false, error: '写标签异常：$e');
     }
   }
 

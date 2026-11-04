@@ -22,9 +22,14 @@ class DownloadRecord {
   final int size;
   final int createdAt;
 
-  /// 标签状态：tagged 已写 / failed 写失败（文件保留）/ untagged 未写
-  /// （含旧记录缺省）。
+  /// 标签状态：tagged 已写（文本+封面）/ tagged_text 仅文本已写（封面
+  /// 写入失败，原因见 [tagError]）/ failed 写失败（文件保留）/
+  /// untagged 未写（含旧记录缺省）。
   final String tagStatus;
+
+  /// 标签失败/降级的具体原因原文（tagger 回传，下载管理里可见，
+  /// 供用户直接照着回报）；无问题为空串。
+  final String tagError;
   const DownloadRecord({
     required this.trackId,
     required this.title,
@@ -34,7 +39,11 @@ class DownloadRecord {
     required this.size,
     required this.createdAt,
     this.tagStatus = 'untagged',
+    this.tagError = '',
   });
+  /// 落盘格式（与进行中任务同一口径：以实际落盘文件为准）
+  String get formatLabel => path.endsWith('.flac') ? 'FLAC' : 'M4A';
+
   factory DownloadRecord.fromJson(Map<String, dynamic> j) => DownloadRecord(
         trackId: '${j['trackId']}',
         title: '${j['title'] ?? ''}',
@@ -44,6 +53,7 @@ class DownloadRecord {
         size: (j['size'] as num?)?.toInt() ?? 0,
         createdAt: (j['createdAt'] as num?)?.toInt() ?? 0,
         tagStatus: '${j['tagStatus'] ?? 'untagged'}',
+        tagError: '${j['tagError'] ?? ''}',
       );
   Map<String, dynamic> toJson() => {
         'trackId': trackId,
@@ -54,13 +64,58 @@ class DownloadRecord {
         'size': size,
         'createdAt': createdAt,
         'tagStatus': tagStatus,
+        'tagError': tagError,
       };
+}
+
+/// 两段式写标签（文本与封面解耦）：先写全量（文本+封面）；失败且带封面
+/// 时退到仅文本再试——封面问题不许拖垮文本标签。
+/// 返回 (status, error)：tagged / tagged_text（error 记封面失败原因）/
+/// failed（error 记最终失败原因）。纯逻辑（tagger 注入），可测。
+Future<({String status, String error})> applyDownloadTags(
+  String path,
+  MediaTags tags, {
+  required Future<({bool ok, String? error})> Function(
+          String path, MediaTags tags)
+      tagger,
+}) async {
+  final full = await tagger(path, tags);
+  if (full.ok) return (status: 'tagged', error: '');
+  if (tags.coverBytes != null) {
+    final textOnly = MediaTags(
+      title: tags.title,
+      artist: tags.artist,
+      album: tags.album,
+      date: tags.date,
+    );
+    final retry = await tagger(path, textOnly);
+    if (retry.ok) {
+      return (
+        status: 'tagged_text',
+        error: '封面写入失败：${full.error ?? '未知原因'}',
+      );
+    }
+    return (status: 'failed', error: retry.error ?? full.error ?? '未知原因');
+  }
+  return (status: 'failed', error: full.error ?? '未知原因');
 }
 
 class DownloadTask {
   final String trackId;
+  final String title;
+  final String artist;
+
+  /// 将落盘的实际格式（以解析结果/落盘路径为准，不是设置档位名）：
+  /// 'FLAC'（无损解密落盘）/ 'M4A'（AAC 直链落盘）。解析完成前为空串。
+  String format;
   double progress; // 0..1, -1 未知总量
-  DownloadTask(this.trackId, this.progress);
+  DownloadTask(
+    this.trackId,
+    this.progress, {
+    this.title = '',
+    this.artist = '',
+    this.format = '',
+  });
 }
 
 /// 下载：流式拉所选音质直链落盘 .m4a（不转码），落盘后写 MP4 标签
@@ -124,8 +179,9 @@ class DownloadService extends ChangeNotifier {
   }
 
   /// 下载一首；已下过同音质直接返回既有记录。
+  /// 音质读「下载音质」（与播放音质独立，未单独设置时跟随播放音质）。
   Future<DownloadRecord> download(Track track) async {
-    final quality = settings.defaultQuality;
+    final quality = settings.downloadQuality;
     final existing = _records.where((r) => r.trackId == track.id).firstOrNull;
     // 无损优先分支：设置选了无损且该曲带平台无损档 → 解密后落盘 FLAC。
     // 放在通用早返回之前，避免已下过 m4a 时误把 m4a 记录当无损交付。
@@ -158,7 +214,14 @@ class DownloadService extends ChangeNotifier {
     final path = await uniqueM4aPath(dir.path, base);
     final token = CancelToken();
     _cancels[track.id] = token;
-    _tasks[track.id] = DownloadTask(track.id, 0);
+    // 格式以落盘路径为准：本链路恒落 .m4a（AAC 流不转码）
+    _tasks[track.id] = DownloadTask(
+      track.id,
+      0,
+      title: track.name,
+      artist: track.artistNames,
+      format: 'M4A',
+    );
     notifyListeners();
     try {
       await _dio.download(
@@ -181,7 +244,11 @@ class DownloadService extends ChangeNotifier {
       notifyListeners();
       rethrow;
     }
-    final tagOk = await Mp4Tagger.tagFile(path, await _buildTags(track));
+    final tagResult = await applyDownloadTags(
+      path,
+      await _buildTags(track),
+      tagger: Mp4Tagger.tagFileDetailed,
+    );
     final size = await File(path).length();
     final record = DownloadRecord(
       trackId: track.id,
@@ -191,7 +258,8 @@ class DownloadService extends ChangeNotifier {
       quality: resolved.stream.quality,
       size: size,
       createdAt: DateTime.now().millisecondsSinceEpoch,
-      tagStatus: tagOk ? 'tagged' : 'failed',
+      tagStatus: tagResult.status,
+      tagError: tagResult.error,
     );
     _records = [record, ..._records.where((r) => r.trackId != track.id)];
     _tasks.remove(track.id);
@@ -241,7 +309,14 @@ class DownloadService extends ChangeNotifier {
     if (_tasks.containsKey(track.id)) {
       throw StateError('正在下载中');
     }
-    _tasks[track.id] = DownloadTask(track.id, 0);
+    // 无损链路恒落 .flac，任务创建时格式即定
+    _tasks[track.id] = DownloadTask(
+      track.id,
+      0,
+      title: track.name,
+      artist: track.artistNames,
+      format: 'FLAC',
+    );
     notifyListeners();
     try {
       final flacPath = await resolver.prepareLossless(
@@ -264,7 +339,11 @@ class DownloadService extends ChangeNotifier {
       );
       final dest = await uniqueFlacPath(dir.path, base);
       await File(flacPath).copy(dest);
-      final tagOk = await FlacTagger.tagFile(dest, await _buildTags(track));
+      final tagResult = await applyDownloadTags(
+        dest,
+        await _buildTags(track),
+        tagger: FlacTagger.tagFileDetailed,
+      );
       final size = await File(dest).length();
       final record = DownloadRecord(
         trackId: track.id,
@@ -274,7 +353,8 @@ class DownloadService extends ChangeNotifier {
         quality: 'lossless',
         size: size,
         createdAt: DateTime.now().millisecondsSinceEpoch,
-        tagStatus: tagOk ? 'tagged' : 'failed',
+        tagStatus: tagResult.status,
+        tagError: tagResult.error,
       );
       _records = [record, ..._records.where((r) => r.trackId != track.id)];
       _tasks.remove(track.id);

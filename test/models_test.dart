@@ -106,4 +106,74 @@ void main() {
       expect(body['next_cursor'], isNotNull);
     });
   });
+
+  group('VIP 标识与音质档解析（第 7/10 项）', () {
+    test('App 侧：label_info.only_vip_playable=true → VIP（seo 小半）', () {
+      final seo = SeoTrack.fromJson(fixture('seo_track.json'));
+      expect(seo.track.name, '小半');
+      expect(seo.track.isVip, isTrue);
+      // label_info.quality_map 含 lossless → 有无损版本
+      expect(seo.track.topQuality, 'lossless');
+    });
+
+    test('App 侧：only_vip_playable 缺失 → 非 VIP（playlist Augenblick）', () {
+      final body = fixture('playlist.json');
+      final mr = (body['media_resources'] as List).first as Map<String, dynamic>;
+      final wrapper = (mr['entity'] as Map<String, dynamic>)['track_wrapper']
+          as Map<String, dynamic>;
+      final track = Track.fromWrapped(wrapper)!;
+      expect(track.name, 'Augenblick (Qntal Remix)');
+      expect(track.isVip, isFalse);
+      expect(track.topQuality, 'lossless');
+    });
+
+    test('App 侧：无 label_info 时按 bit_rates 取最高档', () {
+      final t = Track.fromJson({
+        'id': '1',
+        'name': 'x',
+        'bit_rates': [
+          {'quality': 'medium', 'br': 1, 'size': 1},
+          {'quality': 'higher', 'br': 2, 'size': 2},
+        ],
+      });
+      expect(t.isVip, isFalse);
+      expect(t.topQuality, 'higher');
+      final empty = Track.fromJson({'id': '2', 'name': 'y'});
+      expect(empty.topQuality, '');
+    });
+
+    test('平台侧：commerce_info.icon_info.type=svip → VIP，空 → 非 VIP', () {
+      final body = fixture('platform_feed.json');
+      final medias = <Map<String, dynamic>>[];
+      void walk(dynamic o) {
+        if (o is Map<String, dynamic>) {
+          if (o['track_entity'] is Map<String, dynamic>) medias.add(o);
+          for (final v in o.values) {
+            walk(v);
+          }
+        } else if (o is List) {
+          for (final v in o) {
+            walk(v);
+          }
+        }
+      }
+
+      walk(body);
+      expect(medias.length, 3);
+      final tracks = medias.map(Track.fromPlatformMedia).whereType<Track>().toList();
+      final byName = {for (final t in tracks) t.name: t};
+      expect(byName['离人愁 - 女生版']!.isVip, isFalse);
+      expect(byName['沦陷']!.isVip, isTrue);
+      expect(byName['游京（滔滔江水）']!.isVip, isTrue);
+      // 平台 bit_rates 含 lossless → 无损档
+      expect(byName['离人愁 - 女生版']!.topQuality, 'lossless');
+    });
+
+    test('toJson/fromJson 往返保 VIP 与无损标记', () {
+      final seo = SeoTrack.fromJson(fixture('seo_track.json'));
+      final restored = Track.fromJson(seo.track.toJson());
+      expect(restored.isVip, isTrue);
+      expect(restored.topQuality, 'lossless');
+    });
+  });
 }

@@ -23,12 +23,30 @@ class SettingsScreen extends StatelessWidget {
           title: const Text('默认音质'),
           subtitle: Text(SettingsService.qualityLabel(settings.defaultQuality)),
           trailing: const Icon(Icons.chevron_right),
-          onTap: () => _pickQuality(context, settings),
+          onTap: () => _pickQuality(
+            context,
+            title: '默认音质（播放）',
+            value: settings.defaultQuality,
+            onPick: settings.setQuality,
+          ),
         ),
         const Divider(),
         const ListTile(
           title: Text('下载'),
           leading: Icon(Icons.download_outlined),
+        ),
+        ListTile(
+          title: const Text('下载音质'),
+          subtitle: Text(settings.hasDownloadQuality
+              ? SettingsService.qualityLabel(settings.downloadQuality)
+              : '跟随播放音质（${SettingsService.qualityLabel(settings.downloadQuality)}）'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => _pickQuality(
+            context,
+            title: '下载音质',
+            value: settings.downloadQuality,
+            onPick: settings.setDownloadQuality,
+          ),
         ),
         ListTile(
           title: const Text('下载路径'),
@@ -83,20 +101,26 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  void _pickQuality(BuildContext context, SettingsService settings) {
+  void _pickQuality(
+    BuildContext context, {
+    required String title,
+    required String value,
+    required Future<void> Function(String) onPick,
+  }) {
     showModalBottomSheet<void>(
       context: context,
       builder: (ctx) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            ListTile(title: Text(title)),
             for (final q in SettingsService.qualityOptions)
               RadioListTile<String>(
                 value: q,
-                groupValue: settings.defaultQuality,
+                groupValue: value,
                 title: Text(SettingsService.qualityLabel(q)),
                 onChanged: (v) {
-                  if (v != null) settings.setQuality(v);
+                  if (v != null) onPick(v);
                   Navigator.pop(ctx);
                 },
               ),

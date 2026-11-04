@@ -8,6 +8,7 @@ import '../services/library_service.dart';
 import '../services/player_service.dart';
 import '../screens/detail_screens.dart';
 import 'cover_image.dart';
+import 'track_badges.dart';
 
 /// 歌曲行：封面/歌名/歌手/时长 + 正在播放高亮 + 更多菜单（收藏/下载/加歌单）
 class TrackTile extends StatelessWidget {
@@ -48,14 +49,28 @@ class TrackTile extends StatelessWidget {
           CoverImage(cover: track.cover, width: 48, height: 48),
         ],
       ),
-      title: Text(
-        track.name,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          fontWeight: isCurrent ? FontWeight.w700 : FontWeight.normal,
-          color: isCurrent ? scheme.primary : null,
-        ),
+      title: Row(
+        children: [
+          Flexible(
+            child: Text(
+              track.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontWeight: isCurrent ? FontWeight.w700 : FontWeight.normal,
+                color: isCurrent ? scheme.primary : null,
+              ),
+            ),
+          ),
+          if (track.topQuality.isNotEmpty) ...[
+            const SizedBox(width: 6),
+            QualityBadge(topQuality: track.topQuality),
+          ],
+          if (track.isVip) ...[
+            const SizedBox(width: 6),
+            const VipBadge(),
+          ],
+        ],
       ),
       subtitle: Text(
         [

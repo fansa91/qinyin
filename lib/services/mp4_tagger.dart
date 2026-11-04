@@ -322,40 +322,69 @@ class Mp4Tagger {
   }
 
   /// 给文件写标签：成功返回 true；失败保留原文件、返回 false（不抛）。
-  static Future<bool> tagFile(String path, MediaTags tags) async {
+  static Future<bool> tagFile(String path, MediaTags tags) async =>
+      (await tagFileDetailed(path, tags)).ok;
+
+  /// [tagFile] 的详细版：失败时带回具体原因（供下载记录落盘展示）。
+  static Future<({bool ok, String? error})> tagFileDetailed(
+      String path, MediaTags tags) async {
     final tmp = File('$path.qytag');
     try {
-      final src = await File(path).readAsBytes();
-      final tagged = buildTaggedMp4(src, tags);
+      final Uint8List src;
+      try {
+        src = await File(path).readAsBytes();
+      } catch (e) {
+        return (ok: false, error: '读取源文件失败：$e');
+      }
+      final Uint8List tagged;
+      try {
+        tagged = buildTaggedMp4(src, tags);
+      } catch (e) {
+        return (ok: false, error: '构建标签失败：$e');
+      }
       // 校验：标签回读一致 + stco 定位到的首 chunk 与源一致（偏移没写坏）
       final read = readTags(tagged);
-      if (tags.title.isNotEmpty && read[_kTitle] != tags.title) return false;
+      if (tags.title.isNotEmpty && read[_kTitle] != tags.title) {
+        return (ok: false, error: '自检失败：TITLE 回读不一致');
+      }
       if (tags.artist.isNotEmpty && read[_kArtist] != tags.artist) {
-        return false;
+        return (ok: false, error: '自检失败：ARTIST 回读不一致');
       }
       final before = firstChunkSample(src);
       final after = firstChunkSample(tagged);
       if (before == null || after == null || before.length != after.length) {
-        return false;
+        return (ok: false, error: '自检失败：首 chunk 样本不可读');
       }
       for (var i = 0; i < before.length; i++) {
-        if (before[i] != after[i]) return false;
+        if (before[i] != after[i]) {
+          return (ok: false, error: '自检失败：首 chunk 字节不一致（stco 偏移）');
+        }
       }
-      await tmp.writeAsBytes(tagged, flush: true);
-      if (await tmp.length() != tagged.length) return false;
+      try {
+        await tmp.writeAsBytes(tagged, flush: true);
+      } catch (e) {
+        return (ok: false, error: '写临时文件失败：$e');
+      }
+      if (await tmp.length() != tagged.length) {
+        return (ok: false, error: '临时文件大小不符');
+      }
       try {
         await tmp.rename(path);
       } on FileSystemException {
-        final dest = File(path);
-        if (await dest.exists()) await dest.delete();
-        await tmp.rename(path);
+        try {
+          final dest = File(path);
+          if (await dest.exists()) await dest.delete();
+          await tmp.rename(path);
+        } catch (e) {
+          return (ok: false, error: '替换原文件失败：$e');
+        }
       }
-      return true;
-    } catch (_) {
+      return (ok: true, error: null);
+    } catch (e) {
       try {
         if (await tmp.exists()) await tmp.delete();
       } catch (_) {}
-      return false;
+      return (ok: false, error: '写标签异常：$e');
     }
   }
 }

@@ -54,6 +54,31 @@ class CoverArt {
 String _str(dynamic v) => v == null ? '' : '$v';
 int _int(dynamic v) => v is int ? v : (v is num ? v.toInt() : int.tryParse('$v') ?? 0);
 
+/// 由 bit_rates 元数据取最高档（highest > higher > medium）；无则 ''
+String _topFromBitRates(List<BitRate> bitRates) {
+  var top = '';
+  for (final b in bitRates) {
+    if (b.quality == 'highest') return 'highest';
+    if (b.quality == 'higher') top = 'higher';
+    if (b.quality == 'medium' && top.isEmpty) top = 'medium';
+  }
+  return top;
+}
+
+/// 平台侧最高音质档：full.bit_rates 或 video_model 流含 lossless 即无损，
+/// 否则按 bit_rates 最高档
+String _platformTopQuality(
+    Map<String, dynamic> full, List<PlayStream> streams) {
+  final bitRates = ((full['bit_rates'] as List?) ?? const [])
+      .map((e) => BitRate.fromJson(e as Map<String, dynamic>))
+      .toList();
+  if (bitRates.any((b) => b.quality == 'lossless') ||
+      streams.any((s) => s.quality == 'lossless')) {
+    return 'lossless';
+  }
+  return _topFromBitRates(bitRates);
+}
+
 /// 音质档（曲目 bit_rates 元数据）
 class BitRate {
   final String quality; // medium / higher / highest
@@ -123,6 +148,21 @@ class Track {
   final int? countCollected;
   final int? countComment;
   final int? countShared;
+
+  /// 该曲数据可得的最高音质档（列表音质徽标用；''=数据未带任何音质信息，
+  /// 不显示徽标）。取值口径：
+  /// - 'lossless'：App 侧 label_info.quality_map 含 lossless 或
+  ///   quality_only_vip_can_play 含 lossless（该曲有无损版本）；
+  ///   平台侧 bit_rates / platformStreams 含 lossless；
+  /// - 否则取 bit_rates 里的最高档（highest > higher > medium）。
+  final String topQuality;
+
+  /// VIP/付费曲目（官方客户端同款判定，列表显示 VIP 徽标）：
+  /// - App 侧：label_info.only_vip_playable == true（字段缺失=非 VIP，
+  ///   仅无损/下载受限的普通曲目不带此字段）；
+  /// - 平台侧：commerce_info.icon_info.type 非空（如 'svip'，即官方
+  ///   渲染徽标用的字段本身），或 playable_condition 含 membership_type。
+  final bool isVip;
   final String? coverColorHex; // colors.cover_gradient_effect_color[0].rgb
   final Map<String, List<String>> makers; // composers/lyricists/...
 
@@ -146,6 +186,8 @@ class Track {
     this.countCollected,
     this.countComment,
     this.countShared,
+    this.topQuality = '',
+    this.isVip = false,
     this.coverColorHex,
     this.makers = const {},
     this.platformStreams = const [],
@@ -198,6 +240,19 @@ class Track {
         }
       }
     }
+    final bitRates = ((j['bit_rates'] as List?) ?? const [])
+        .map((e) => BitRate.fromJson(e as Map<String, dynamic>))
+        .toList();
+    final labelInfo = (j['label_info'] as Map<String, dynamic>?) ?? const {};
+    final qualityMap =
+        (labelInfo['quality_map'] as Map<String, dynamic>?) ?? const {};
+    final vipCanPlay = ((labelInfo['quality_only_vip_can_play'] as List?) ??
+            const [])
+        .map((e) => '$e')
+        .toList();
+    final hasLossless = bitRates.any((b) => b.quality == 'lossless') ||
+        qualityMap.containsKey('lossless') ||
+        vipCanPlay.contains('lossless');
     return Track(
       id: _str(j['id']),
       name: _str(j['name']),
@@ -210,12 +265,12 @@ class Track {
       cover: cover,
       durationMs: _int(j['duration']),
       vid: _str(j['vid']),
-      bitRates: ((j['bit_rates'] as List?) ?? const [])
-          .map((e) => BitRate.fromJson(e as Map<String, dynamic>))
-          .toList(),
+      bitRates: bitRates,
       countCollected: stats['count_collected'] == null ? null : _int(stats['count_collected']),
       countComment: stats['count_comment'] == null ? null : _int(stats['count_comment']),
       countShared: stats['count_shared'] == null ? null : _int(stats['count_shared']),
+      topQuality: hasLossless ? 'lossless' : _topFromBitRates(bitRates),
+      isVip: labelInfo['only_vip_playable'] == true,
       coverColorHex: colorHex,
       makers: makers,
     );
@@ -264,6 +319,13 @@ class Track {
     final platformStreams = fullVmRaw is String
         ? parseVideoModelStreams(fullVmRaw)
         : const <PlayStream>[];
+    // VIP 判定：commerce_info.icon_info.type 是官方渲染徽标的字段本身
+    // （'svip' 等非空即付费曲）；playable_condition 含 membership_type 兜底
+    final commerce = (te['commerce_info'] as Map<String, dynamic>?) ?? const {};
+    final iconType =
+        _str((commerce['icon_info'] as Map<String, dynamic>?)?['type']);
+    final isVip = iconType.isNotEmpty ||
+        _str(commerce['playable_condition']).contains('membership_type');
     return Track(
       id: id,
       name: _str(base['name']),
@@ -284,6 +346,8 @@ class Track {
       countComment:
           stats['count_comment'] == null ? null : _int(stats['count_comment']),
       countShared: stats['count_shared'] == null ? null : _int(stats['count_shared']),
+      topQuality: _platformTopQuality(full, platformStreams),
+      isVip: isVip,
       coverColorHex: colorHex,
       makers: makers,
       platformStreams: platformStreams,
@@ -321,6 +385,13 @@ class Track {
           if (countComment != null) 'count_comment': countComment,
           if (countShared != null) 'count_shared': countShared,
         },
+        // 收藏/历史落盘往返保 VIP 与无损标记（fromJson 读同一字段恢复）
+        if (isVip || topQuality == 'lossless')
+          'label_info': {
+            if (isVip) 'only_vip_playable': true,
+            if (topQuality == 'lossless')
+              'quality_only_vip_can_play': ['lossless'],
+          },
       };
 
   @override
