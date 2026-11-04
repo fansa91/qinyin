@@ -6,6 +6,7 @@ import '../services/player_service.dart';
 import '../services/play_queue.dart';
 import 'cover_image.dart';
 import 'seek_bar.dart';
+import 'track_badges.dart';
 
 /// 迷你播放条（移动端）与桌面通栏播放条共用组件。
 /// 桌面通栏时 [fullBar] 为 true，额外显示进度与队列/循环/音量控制。
@@ -34,15 +35,19 @@ class MiniPlayer extends StatelessWidget {
     final progress = player.duration.inMilliseconds > 0
         ? player.position.inMilliseconds / player.duration.inMilliseconds
         : 0.0;
-    // 时长显示（悬浮条与桌面通栏同一口径）：总时长常驻在歌手行
-    // 尾部「歌手 · 3:33」；引擎时长优先（实际流长），未就绪时退
-    // 曲目元数据时长；两者都没有就不拼，不显示占位假数。
+    // 副行形态分端（用户定版）：移动悬浮条是「歌手 · 3:33」——
+    // 总时长拼行尾（引擎时长优先，未就绪退曲目元数据时长；都
+    // 没有就不拼、不摆假数）；桌面通栏副行只要「歌手 · 专辑」
+    // （复用 artistAlbumText，专辑为空只剩歌手名），不再拼时长
+    // ——桌面端的时长由通栏进度条右端数字承担。
     final totalMs = player.duration.inMilliseconds > 0
         ? player.duration.inMilliseconds
         : track.durationMs;
-    final artistLine = totalMs > 0
-        ? '${track.artistNames} · ${formatDurationMs(totalMs)}'
-        : track.artistNames;
+    final artistLine = fullBar
+        ? artistAlbumText(track)
+        : totalMs > 0
+            ? '${track.artistNames} · ${formatDurationMs(totalMs)}'
+            : track.artistNames;
     return Material(
       color: scheme.surfaceContainer,
       elevation: floating ? 6 : 0,
@@ -60,6 +65,10 @@ class MiniPlayer extends StatelessWidget {
               position: player.position,
               duration: player.duration,
               onSeek: player.seek,
+              // 时间数字在进度条左右两端同行呈现（1:23 ━━━ 3:33），
+              // 随位置流实时更新；拖动 seek 行为与原来一致
+              showTimes: true,
+              inlineTimes: true,
             )
           else
             LinearProgressIndicator(

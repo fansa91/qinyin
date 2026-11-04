@@ -76,6 +76,71 @@ void main() {
       expect(slider().value, 0.5);
     });
 
+    testWidgets('inlineTimes：时间数字在滑杆左右两端同行渲染', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SeekBar(
+              position: const Duration(seconds: 10),
+              duration: const Duration(seconds: 100),
+              onSeek: (_) {},
+              showTimes: true,
+              inlineTimes: true,
+            ),
+          ),
+        ),
+      );
+      expect(find.text('0:10'), findsOneWidget, reason: '左端=当前时间');
+      expect(find.text('1:40'), findsOneWidget, reason: '右端=总时长');
+      // 几何：左数字在滑杆左侧、右数字在滑杆右侧，且同一行（纵向重叠）
+      final sliderRect = tester.getRect(find.byType(Slider));
+      final leftRect = tester.getRect(find.text('0:10'));
+      final rightRect = tester.getRect(find.text('1:40'));
+      expect(leftRect.right, lessThanOrEqualTo(sliderRect.left));
+      expect(rightRect.left, greaterThanOrEqualTo(sliderRect.right));
+      expect(leftRect.center.dy, closeTo(sliderRect.center.dy, 24));
+    });
+
+    testWidgets('inlineTimes：左端数字随位置流更新', (tester) async {
+      Widget app(Duration pos) => MaterialApp(
+            home: Scaffold(
+              body: SeekBar(
+                position: pos,
+                duration: const Duration(seconds: 213),
+                onSeek: (_) {},
+                showTimes: true,
+                inlineTimes: true,
+              ),
+            ),
+          );
+      await tester.pumpWidget(app(Duration.zero));
+      expect(find.text('0:00'), findsOneWidget);
+      expect(find.text('3:33'), findsOneWidget);
+      await tester.pumpWidget(app(const Duration(seconds: 83)));
+      expect(find.text('1:23'), findsOneWidget,
+          reason: '位置流推进后左端数字应实时跟随');
+      expect(find.text('0:00'), findsNothing);
+    });
+
+    testWidgets('inlineTimes：时长未知时右端不摆假数', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SeekBar(
+              position: const Duration(seconds: 10),
+              duration: Duration.zero,
+              onSeek: (_) {},
+              showTimes: true,
+              inlineTimes: true,
+            ),
+          ),
+        ),
+      );
+      expect(find.text('0:10'), findsOneWidget, reason: '左端当前时间照常');
+      expect(find.text('0:00'), findsNothing,
+          reason: '右端不得用 0:00 冒充总时长');
+    });
+
     testWidgets('位置流追上目标后交还控制', (tester) async {
       final seeks = <Duration>[];
       Widget app(Duration pos) => MaterialApp(

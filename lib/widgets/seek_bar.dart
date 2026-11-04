@@ -34,12 +34,18 @@ class SeekBar extends StatefulWidget {
   final Duration duration;
   final ValueChanged<Duration> onSeek;
   final bool showTimes;
+
+  /// 时间数字与滑杆同行（左当前时间、右总时长，如
+  /// 「1:23 ━━━ 3:33」）；false 时数字在滑杆下方一行两端
+  /// （播放页/推荐页既有口径）。仅 [showTimes] 时生效。
+  final bool inlineTimes;
   const SeekBar({
     super.key,
     required this.position,
     required this.duration,
     required this.onSeek,
     this.showTimes = false,
+    this.inlineTimes = false,
   });
 
   @override
@@ -110,6 +116,27 @@ class _SeekBarState extends State<SeekBar> {
     final displayPos = _dragFraction != null
         ? seekTargetForFraction(_dragFraction!, widget.duration)
         : widget.position;
+    final timeStyle = Theme.of(context).textTheme.bodySmall;
+    if (widget.inlineTimes) {
+      // 同行形态（桌面通栏）：左=当前时间（拖动时跟拖动目标走，
+      // 与滑块同口径）、右=总时长；时长未知时右端不摆假数。
+      return Row(
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(left: 12),
+            child: Text(formatDurationMs(displayPos.inMilliseconds),
+                style: timeStyle),
+          ),
+          Expanded(child: slider),
+          if (widget.duration.inMilliseconds > 0)
+            Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: Text(formatDurationMs(widget.duration.inMilliseconds),
+                  style: timeStyle),
+            ),
+        ],
+      );
+    }
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [

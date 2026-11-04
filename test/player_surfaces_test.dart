@@ -4,6 +4,9 @@
 //   播放页同一口径；专辑数据缺失时该行只显示歌手名，不编造）；
 // - MiniPlayer 时长：歌手行尾常驻总时长「歌手 · 3:33」（引擎
 //   时长未就绪时退曲目元数据时长）；无时长数据时不拼占位；
+// - 桌面通栏 MiniPlayer：副行只要「歌手 · 专辑」不拼时长
+//   （移动悬浮条不变，用户本轮明确仅桌面端；时长改由通栏
+//   进度条左右两端同行呈现的当前时间/总时长数字承担）；
 // - 正在播放相关面补播放/暂停：桌面播放页「队列」表原本只有
 //   点选跳播，表头补与全局状态同步的播放/暂停键。
 //
@@ -113,6 +116,64 @@ void main() {
     await pumpFrames(tester);
     expect(find.text('歌手甲'), findsOneWidget);
     expect(find.textContaining('0:00'), findsNothing);
+    h.player.dispose();
+  });
+
+  testWidgets('桌面通栏 MiniPlayer：副行只有「歌手 · 专辑」、不含时长',
+      (tester) async {
+    useSurface(tester, const Size(1280, 800), 1.0);
+    final h = Harness();
+    await h.init([song('w1')]);
+    await tester.pumpWidget(
+        h.app(const Scaffold(body: MiniPlayer(fullBar: true))));
+    await pumpFrames(tester);
+    expect(find.text('歌手甲 · 专辑甲'), findsOneWidget,
+        reason: '桌面通栏专辑名拼在歌手名旁边（用户更正口径）');
+    expect(find.text('歌手甲 · 专辑甲 · 3:33'), findsNothing,
+        reason: '副行不再拼时长——时长由进度条右端数字承担');
+    // 进度条两端时间数字：左=当前时间、右=总时长（独立 Text）
+    expect(find.text('0:00'), findsOneWidget, reason: '进度条左端当前时间');
+    expect(find.text('3:33'), findsOneWidget, reason: '进度条右端总时长');
+    h.player.dispose();
+  });
+
+  testWidgets('桌面通栏 MiniPlayer：无专辑时副行只有歌手名', (tester) async {
+    useSurface(tester, const Size(1280, 800), 1.0);
+    final h = Harness();
+    await h.init([song('w2', album: '')]);
+    await tester.pumpWidget(
+        h.app(const Scaffold(body: MiniPlayer(fullBar: true))));
+    await pumpFrames(tester);
+    expect(find.text('歌手甲'), findsOneWidget,
+        reason: '专辑为空则副行只剩歌手名，不留分隔符、也不拼时长');
+    h.player.dispose();
+  });
+
+  testWidgets('桌面通栏 MiniPlayer：无时长数据时进度右端不摆假数',
+      (tester) async {
+    useSurface(tester, const Size(1280, 800), 1.0);
+    final h = Harness();
+    await h.init([song('w3', durationMs: 0)]);
+    await tester.pumpWidget(
+        h.app(const Scaffold(body: MiniPlayer(fullBar: true))));
+    await pumpFrames(tester);
+    expect(find.text('歌手甲 · 专辑甲'), findsOneWidget,
+        reason: '副行口径与时长无关，仍是「歌手 · 专辑」');
+    expect(find.text('3:33'), findsNothing);
+    expect(find.text('0:00'), findsOneWidget,
+        reason: '只有进度条左端当前时间一个 0:00，右端不冒充总时长');
+    h.player.dispose();
+  });
+
+  testWidgets('桌面通栏 MiniPlayer：窄桌面窗（900）无溢出', (tester) async {
+    useSurface(tester, const Size(900, 700), 1.0);
+    final h = Harness();
+    await h.init([song('w4'), song('w5')]);
+    await tester.pumpWidget(
+        h.app(const Scaffold(body: MiniPlayer(fullBar: true))));
+    await pumpFrames(tester);
+    expect(tester.takeException(), isNull,
+        reason: '900 宽桌面窗下通栏条（含两端时间数字）不得溢出');
     h.player.dispose();
   });
 
