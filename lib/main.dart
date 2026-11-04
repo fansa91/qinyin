@@ -11,10 +11,12 @@ import 'core/theme.dart';
 import 'screens/downloads_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/library_screen.dart';
+import 'screens/login_screen.dart';
 import 'screens/player_screen.dart';
 import 'screens/recommend_screen.dart';
 import 'screens/search_screen.dart';
 import 'screens/settings_screen.dart';
+import 'services/auth_service.dart';
 import 'services/cache_service.dart';
 import 'services/download_service.dart';
 import 'services/library_service.dart';
@@ -31,7 +33,10 @@ void main() async {
   await settings.init();
   final library = LibraryService();
   await library.init();
-  final service = QishuiService();
+  // 登录会话：从本机安全存储恢复（无会话时就是空态，游客态零影响）
+  final auth = AuthService(store: FlutterSecureKeyValueStore());
+  await auth.init();
+  final service = QishuiService(auth: auth);
   final resolver = PlayResolver(
     service.seoTrack,
     losslessCache: LosslessCache(),
@@ -66,6 +71,7 @@ void main() async {
       downloads: downloads,
       player: player,
       cache: cache,
+      auth: auth,
       systemSeed: systemSeed,
     ),
   );
@@ -79,6 +85,7 @@ class QinyinApp extends StatelessWidget {
   final DownloadService downloads;
   final PlayerService player;
   final CacheService cache;
+  final AuthService auth;
   final Color? systemSeed;
 
   const QinyinApp({
@@ -90,6 +97,7 @@ class QinyinApp extends StatelessWidget {
     required this.downloads,
     required this.player,
     required this.cache,
+    required this.auth,
     this.systemSeed,
   });
 
@@ -101,6 +109,7 @@ class QinyinApp extends StatelessWidget {
         ChangeNotifierProvider.value(value: library),
         ChangeNotifierProvider.value(value: downloads),
         ChangeNotifierProvider.value(value: player),
+        ChangeNotifierProvider.value(value: auth),
         Provider.value(value: cache),
         Provider.value(value: service),
         Provider.value(value: resolver),
@@ -151,6 +160,7 @@ class QinyinApp extends StatelessWidget {
               '/search': (_) => const SearchScreen(),
               '/settings': (_) => const SettingsScreen(),
               '/theme': (_) => const ThemeSettingsScreen(),
+              '/login': (_) => const LoginScreen(),
             },
           );
         },

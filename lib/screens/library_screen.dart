@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../core/responsive.dart';
 import '../services/library_service.dart';
 import '../services/player_service.dart';
+import '../widgets/account_section.dart';
 import '../widgets/cover_image.dart';
 import '../widgets/track_tile.dart';
 import 'detail_screens.dart';
@@ -41,15 +42,23 @@ class LibraryScreen extends StatelessWidget {
         // 宽屏自适应：四个页签的列表统一限宽居中（表单类页面
         // 口径 800），不再拉满整窗；AppBar/页签条为页面 chrome
         // 保持满宽。compact 下约束不起作用。
-        body: const ConstrainedCenter(
-          child: TabBarView(
-            children: [
-              _FavTracksTab(),
-              _FavCollectionsTab(),
-              _MyPlaylistsTab(),
-              _HistoryTab(),
-            ],
-          ),
+        // 顶部账号行是页面 chrome（同 AppBar 口径满宽），不入限宽列。
+        body: const Column(
+          children: [
+            AccountBar(),
+            Expanded(
+              child: ConstrainedCenter(
+                child: TabBarView(
+                  children: [
+                    _FavTracksTab(),
+                    _FavCollectionsTab(),
+                    _MyPlaylistsTab(),
+                    _HistoryTab(),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

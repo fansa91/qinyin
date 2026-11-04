@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -376,60 +378,16 @@ class _RecommendScreenState extends State<RecommendScreen> {
   }
 
   Widget _header(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 10, 8, 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('推荐',
-                    style: Theme.of(context).textTheme.headlineSmall),
-                const SizedBox(height: 2),
-                Text(
-                  '官方推荐流 · 游客版（登录后推荐更准）',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                ),
-                // 场景入口：清单拉到才出现（失败优雅缺席）；chip 上
-                // 显示当前场景名，未选时为「默认推荐」
-                if (_modes != null && _modes!.isNotEmpty) ...[
-                  const SizedBox(height: 6),
-                  InputChip(
-                    avatar: const Icon(Icons.auto_awesome, size: 16),
-                    label: Text(_scene?.name ?? '默认推荐'),
-                    onPressed: _refreshing ? null : _showScenePicker,
-                  ),
-                ],
-              ],
-            ),
-          ),
-          IconButton(
-            tooltip: '刷新推荐（换一批）',
-            icon: _refreshing
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.refresh),
-            onPressed: _refreshing ? null : _refresh,
-          ),
-          IconButton(
-            tooltip: '已加载列表',
-            icon: const Icon(Icons.queue_music),
-            onPressed: _tracks.isEmpty ? null : () => _showLoadedList(context),
-          ),
-          IconButton(
-            tooltip: '搜索',
-            icon: const Icon(Icons.search),
-            onPressed: () => Navigator.pushNamed(context, '/search'),
-          ),
-        ],
-      ),
+    return RecommendHeader(
+      expanded: isExpanded(context),
+      modes: _modes,
+      scene: _scene,
+      refreshing: _refreshing,
+      loadedListEnabled: _tracks.isNotEmpty,
+      onRefresh: _refresh,
+      onShowLoadedList: () => _showLoadedList(context),
+      onSearch: () => Navigator.pushNamed(context, '/search'),
+      onPickScene: _showScenePicker,
     );
   }
 
@@ -760,9 +718,114 @@ class _RecommendScreenState extends State<RecommendScreen> {
   }
 }
 
+/// 推荐页页头（移动 / 桌面两形态，用户口径分开定版）：
+/// - **移动（expanded=false）**：「推荐」标题字样已去掉（用户点名），
+///   场景入口 chip 挪到原标题位置充当页头主元素——显示当前场景名、
+///   未选时为「默认推荐」，点开仍是场景网格选择层；原 chip 位置
+///   （副标题下方）不再重复保留。场景清单拉取失败时 chip 优雅缺席，
+///   页头只剩副标题行。
+/// - **桌面（expanded=true）**：保持原布局不动——「推荐」标题 +
+///   副标题 + 副标题下方场景 chip（本批四修只限移动端）。
+/// 右侧三键（刷新/已加载列表/搜索）两形态共用。
+class RecommendHeader extends StatelessWidget {
+  final bool expanded;
+  final List<FeedMode>? modes;
+  final FeedMode? scene;
+  final bool refreshing;
+  final bool loadedListEnabled;
+  final VoidCallback onRefresh;
+  final VoidCallback onShowLoadedList;
+  final VoidCallback onSearch;
+  final VoidCallback onPickScene;
+
+  const RecommendHeader({
+    super.key,
+    required this.expanded,
+    required this.modes,
+    required this.scene,
+    required this.refreshing,
+    required this.loadedListEnabled,
+    required this.onRefresh,
+    required this.onShowLoadedList,
+    required this.onSearch,
+    required this.onPickScene,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // 场景入口：清单拉到才出现（失败优雅缺席）；chip 上显示当前
+    // 场景名，未选时为「默认推荐」
+    final hasModes = modes != null && modes!.isNotEmpty;
+    final Widget sceneChip = InputChip(
+      avatar: const Icon(Icons.auto_awesome, size: 16),
+      label: Text(scene?.name ?? '默认推荐'),
+      onPressed: refreshing ? null : onPickScene,
+    );
+    final subtitle = Text(
+      '官方推荐流 · 游客版（登录后推荐更准）',
+      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+    );
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 10, 8, 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (expanded) ...[
+                  Text('推荐',
+                      style: Theme.of(context).textTheme.headlineSmall),
+                  const SizedBox(height: 2),
+                  subtitle,
+                  if (hasModes) ...[
+                    const SizedBox(height: 6),
+                    sceneChip,
+                  ],
+                ] else ...[
+                  // 移动：场景 chip 占原标题位（页头主元素）
+                  if (hasModes) ...[
+                    sceneChip,
+                    const SizedBox(height: 4),
+                  ],
+                  subtitle,
+                ],
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: '刷新推荐（换一批）',
+            icon: refreshing
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.refresh),
+            onPressed: refreshing ? null : onRefresh,
+          ),
+          IconButton(
+            tooltip: '已加载列表',
+            icon: const Icon(Icons.queue_music),
+            onPressed: loadedListEnabled ? onShowLoadedList : null,
+          ),
+          IconButton(
+            tooltip: '搜索',
+            icon: const Icon(Icons.search),
+            onPressed: onSearch,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// 推荐页的新鲜模式单页（按定版样板图）：大封面（右上角实际音质芯片）、
 /// 封面正下方控制行（可拖 SeekBar + 播放/暂停键）、歌名/歌手、
-/// 一行当前歌词、只读互动计数排。
+/// 只读互动计数排（歌名上方的现行歌词预览行已按用户点名删除）。
 ///
 /// 页面内部再分横向两页（横向 PageView，初始停在推荐流页）：
 /// - 右滑 → 左侧的歌词页（当前曲歌词，同步滚动沿用播放页 [LyricList]）；
@@ -839,7 +902,7 @@ class _RecommendFreshPageState extends State<_RecommendFreshPage> {
               controller: _hController,
               children: [
                 _lyricsPane(context, lines, lineIndex, isCurrent),
-                _mainPane(context, seo, fullTrack, lines, lineIndex, isCurrent),
+                _mainPane(context, seo, fullTrack, isCurrent),
               ],
             ),
           ),
@@ -886,70 +949,69 @@ class _RecommendFreshPageState extends State<_RecommendFreshPage> {
     );
   }
 
-  /// 推荐流页（横向分页右侧页）：封面/歌名/歌手/计数排/下一首露出条。
+  /// 推荐流页（横向分页右侧页）：封面/控制行/歌名/歌手/计数排。
   Widget _mainPane(
     BuildContext context,
     SeoTrack? seo,
     Track fullTrack,
-    List<LyricLine> lines,
-    int lineIndex,
     bool isCurrent,
   ) {
     final player = context.watch<PlayerService>();
     final scheme = Theme.of(context).colorScheme;
-    final currentLyric = lines.isEmpty
-        ? ''
-        : lines[(lineIndex < 0 ? 0 : lineIndex).clamp(0, lines.length - 1)]
-            .text;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Stack(
-          children: [
-            GestureDetector(
-              onTap: seo == null
-                  ? null
-                  : () => Navigator.push(
-                        context,
-                        MaterialPageRoute<void>(
-                          builder: (_) => LyricsScreen(seo: seo),
-                        ),
+        // 封面防压扁（与播放页 FreshPlayer 同一修法）：原「全宽 ×
+        // 屏高 34% 定高」把正方形封面裁成扁盒；改为正方形呈现，
+        // 边长取屏高 34% 与页宽的较小值、水平居中，音质芯片仍
+        // 贴封面右上角。
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final side = math.min(
+              MediaQuery.sizeOf(context).height * 0.34,
+              constraints.maxWidth,
+            );
+            return Center(
+              child: SizedBox(
+                width: side,
+                height: side,
+                child: Stack(
+                  children: [
+                    GestureDetector(
+                      onTap: seo == null
+                          ? null
+                          : () => Navigator.push(
+                                context,
+                                MaterialPageRoute<void>(
+                                  builder: (_) => LyricsScreen(seo: seo),
+                                ),
+                              ),
+                      child: CoverImage(
+                        cover: fullTrack.cover,
+                        width: side,
+                        height: side,
+                        radius: 16,
+                        small: false,
                       ),
-              child: CoverImage(
-                cover: fullTrack.cover,
-                width: double.infinity,
-                height: MediaQuery.sizeOf(context).height * 0.34,
-                radius: 16,
-                small: false,
+                    ),
+                    if (isCurrent)
+                      Positioned(
+                        top: 10,
+                        right: 10,
+                        child: _qualityChip(context, player),
+                      ),
+                  ],
+                ),
               ),
-            ),
-            if (isCurrent)
-              Positioned(
-                top: 10,
-                right: 10,
-                child: _qualityChip(context, player),
-              ),
-          ],
+            );
+          },
         ),
         const SizedBox(height: 10),
         // 封面正下方控制行：进度条（可拖）+ 播放/暂停键
         _controlRow(context, live: isCurrent),
         const SizedBox(height: 8),
-        SizedBox(
-          height: 20,
-          child: currentLyric.isEmpty
-              ? null
-              : Text(
-                  '“$currentLyric”',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodyMedium
-                      ?.copyWith(color: scheme.onSurfaceVariant),
-                ),
-        ),
-        const SizedBox(height: 6),
+        // 歌名上方的现行歌词预览行已整体删除（用户点名，含其
+        // 20px 占位与上间距）：控制行之下直接是歌名
         Text(
           fullTrack.name,
           maxLines: 1,

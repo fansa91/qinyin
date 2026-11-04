@@ -26,6 +26,7 @@ import 'package:qinyin/screens/library_screen.dart';
 import 'package:qinyin/screens/player_screen.dart';
 import 'package:qinyin/screens/search_screen.dart';
 import 'package:qinyin/screens/settings_screen.dart';
+import 'package:qinyin/services/auth_service.dart';
 import 'package:qinyin/services/cache_service.dart';
 import 'package:qinyin/services/download_service.dart';
 import 'package:qinyin/services/library_service.dart';
@@ -87,8 +88,19 @@ Map<String, dynamic> _playlistResource(int i) => {
       },
     };
 
+class _MemoryStore implements SecureKeyValueStore {
+  final Map<String, String> data = {};
+  @override
+  Future<String?> read(String key) async => data[key];
+  @override
+  Future<void> write(String key, String value) async => data[key] = value;
+  @override
+  Future<void> delete(String key) async => data.remove(key);
+}
+
 class Env {
   late final SettingsService settings;
+  late final AuthService auth;
   late final LibraryService library;
   late final PlayResolver resolver;
   late final DownloadService downloads;
@@ -123,6 +135,8 @@ class Env {
     }
     settings = SettingsService();
     await settings.init();
+    auth = AuthService(store: _MemoryStore());
+    await auth.init();
     library = LibraryService();
     await library.init();
     resolver = PlayResolver((id) async => fakeSeo(Track(id: id, name: '占位')));
@@ -154,6 +168,7 @@ class Env {
   Widget app(Widget home) => MultiProvider(
         providers: [
           ChangeNotifierProvider.value(value: settings),
+          ChangeNotifierProvider.value(value: auth),
           ChangeNotifierProvider.value(value: library),
           ChangeNotifierProvider.value(value: downloads),
           ChangeNotifierProvider.value(value: player),

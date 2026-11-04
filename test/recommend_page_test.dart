@@ -15,6 +15,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
+import 'fake_auth.dart';
 import 'package:qinyin/main.dart';
 import 'package:qinyin/models/models.dart';
 import 'package:qinyin/screens/player_screen.dart';
@@ -97,6 +98,7 @@ void main() {
       MultiProvider(
         providers: [
           ChangeNotifierProvider.value(value: player),
+          ChangeNotifierProvider.value(value: testAuthService),
           Provider.value(value: resolver),
           Provider<QishuiService>.value(value: QishuiService()),
         ],
@@ -130,12 +132,10 @@ void main() {
         .toList();
     expect(
       seekRects.any((r) =>
-          r.top >= coverRect.bottom - 2 &&
-          r.bottom <= titleRect.top + 2 &&
-          r.left >= coverRect.left - 1 &&
-          r.right <= coverRect.right + 1),
+          r.top >= coverRect.bottom - 2 && r.bottom <= titleRect.top + 2),
       isTrue,
-      reason: '进度条应紧贴封面下方、歌名之上（封面下控制行）',
+      reason: '进度条应紧贴封面下方、歌名之上（封面下控制行；封面已改'
+          '居中正方形后控制行仍按页宽排布，横向不再与封面同宽）',
     );
     expect(
       find.descendant(
@@ -185,9 +185,11 @@ void main() {
     await pumpFrames(tester);
     expect(player.currentIndex, 0, reason: '下滑应回到上一首');
 
-    // 4) 评论抽屉（遮盖式）：先记下底层页头位置
+    // 4) 评论抽屉（遮盖式）：先记下底层页头位置（锚点用副标题——
+    // 移动页头已按用户点名去掉「推荐」标题字样，副标题仍在原位）
     final headerFinder = find.descendant(
-        of: find.byType(RecommendScreen), matching: find.text('推荐'));
+        of: find.byType(RecommendScreen),
+        matching: find.text('官方推荐流 · 游客版（登录后推荐更准）'));
     final headerPosBefore = tester.getTopLeft(headerFinder);
     await tester.tap(find
         .descendant(
@@ -235,6 +237,7 @@ void main() {
           ChangeNotifierProvider.value(value: library),
           ChangeNotifierProvider.value(value: downloads),
           ChangeNotifierProvider.value(value: player),
+          ChangeNotifierProvider.value(value: testAuthService),
           Provider.value(value: resolver),
           Provider<QishuiService>.value(value: QishuiService()),
         ],
@@ -261,5 +264,107 @@ void main() {
     expect(find.byType(MiniPlayer), findsOneWidget);
 
     player.dispose();
+  });
+
+  testWidgets('页头：移动形态无「推荐」标题、场景 chip 在原标题位（桌面形态不动）',
+      (tester) async {
+    Widget header({required bool expanded, String? sceneName}) =>
+        MaterialApp(
+          home: Scaffold(
+            body: RecommendHeader(
+              expanded: expanded,
+              modes: const [FeedMode(name: 'DJ模式', sceneModeId: '7')],
+              scene: sceneName == null
+                  ? null
+                  : FeedMode(name: sceneName, sceneModeId: '7'),
+              refreshing: false,
+              loadedListEnabled: true,
+              onRefresh: () {},
+              onShowLoadedList: () {},
+              onSearch: () {},
+              onPickScene: () {},
+            ),
+          ),
+        );
+
+    // 移动形态：「推荐」标题字样已去（find.text 整串匹配，副标题
+    // 「官方推荐流…」是另一整串、不会误命中）；场景 chip 显示
+    // 「默认推荐」且位于副标题之上（原标题位）
+    await tester.pumpWidget(header(expanded: false));
+    expect(find.text('推荐'), findsNothing);
+    expect(find.text('默认推荐'), findsOneWidget);
+    final chipRect = tester.getRect(find.text('默认推荐'));
+    final subRect =
+        tester.getRect(find.text('官方推荐流 · 游客版（登录后推荐更准）'));
+    expect(chipRect.bottom <= subRect.top, isTrue,
+        reason: '场景 chip 应占原标题位、在副标题之上');
+
+    // 已选场景：chip 显示场景名
+    await tester.pumpWidget(header(expanded: false, sceneName: 'DJ模式'));
+    expect(find.text('DJ模式'), findsOneWidget);
+    expect(find.text('推荐'), findsNothing);
+
+    // 桌面形态回归（本批四修只限移动端）：标题在、chip 在副标题下方
+    await tester.pumpWidget(header(expanded: true));
+    expect(find.text('推荐'), findsOneWidget);
+    expect(find.text('默认推荐'), findsOneWidget);
+    final titleRect = tester.getRect(find.text('推荐'));
+    final chipRectD = tester.getRect(find.text('默认推荐'));
+    expect(titleRect.bottom <= chipRectD.top, isTrue,
+        reason: '桌面页头保持原布局：标题在上、chip 在副标题下方');
+  });
+
+  testWidgets('推荐页 360/390：无溢出、封面正方形 1:1、歌词预览行已删',
+      (tester) async {
+    addTearDown(() => tester.view.reset());
+    for (final logical in [const Size(360, 740), const Size(390, 844)]) {
+      tester.view.physicalSize =
+          Size(logical.width * 2, logical.height * 2);
+      tester.view.devicePixelRatio = 2.0;
+      SharedPreferences.setMockInitialValues({});
+      final settings = SettingsService();
+      await settings.init();
+      final library = LibraryService();
+      await library.init();
+      final resolver = PlayResolver((id) async => fakeSeo(id));
+      final player = PlayerService(resolver, settings, library);
+      unawaited(player.startRecommendSession(
+        [
+          Track(id: '1', name: '歌曲1'),
+          Track(id: '2', name: '歌曲2'),
+        ],
+        0,
+      ));
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider.value(value: player),
+            ChangeNotifierProvider.value(value: testAuthService),
+            Provider.value(value: resolver),
+            Provider<QishuiService>.value(value: QishuiService()),
+          ],
+          child: const MaterialApp(
+              home: Scaffold(body: RecommendScreen(active: true))),
+        ),
+      );
+      await pumpFrames(tester);
+      expect(tester.takeException(), isNull,
+          reason: '$logical 宽下推荐页不应有溢出/框架异常');
+
+      // 大封面为正方形（1:1），边长不超页宽（左右各 20 内边距）
+      final bigCover = find.byWidgetPredicate(
+          (w) => w is CoverImage && (w.height ?? 0) > 100);
+      expect(bigCover, findsWidgets);
+      final coverSize = tester.getSize(bigCover.first);
+      expect((coverSize.width - coverSize.height).abs(), lessThan(0.5),
+          reason: '封面宽高比应为 1:1（原定高全宽会压扁）');
+      expect(coverSize.width, lessThanOrEqualTo(logical.width - 40 + 0.5));
+
+      // 歌名上方的现行歌词预览行（带中文引号的整行）已删除
+      expect(find.text('“一行歌词”'), findsNothing,
+          reason: '歌词预览行应整体删除（歌词页里的歌词行不受影响）');
+
+      player.dispose();
+    }
   });
 }

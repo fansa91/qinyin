@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../core/responsive.dart';
 import '../services/cache_service.dart';
 import '../services/settings_service.dart';
+import '../widgets/account_section.dart';
 
 /// 设置：默认音质 / 下载（路径+文件名模板）/ 主题 / 关于
 class SettingsScreen extends StatelessWidget {
@@ -16,6 +17,8 @@ class SettingsScreen extends StatelessWidget {
     final settings = context.watch<SettingsService>();
     final body = ListView(
       children: [
+        const AccountSection(),
+        const Divider(),
         const ListTile(
           title: Text('播放'),
           leading: Icon(Icons.play_circle_outline),

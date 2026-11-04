@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/models.dart';
+import 'auth_service.dart';
 
 /// 汽水音乐游客态接口（host: beta-luna.douyin.com）。
 ///
@@ -17,13 +18,17 @@ class QishuiService {
 
   final Dio _dio;
 
-  QishuiService({Dio? dio})
+  /// [auth] 传入时给 Dio 装登录 Cookie 拦截器（仅官方域附带，
+  /// 未登录时零操作，游客态行为不变）；不传则纯游客态。
+  QishuiService({Dio? dio, AuthService? auth})
       : _dio = dio ??
             Dio(BaseOptions(
               baseUrl: host,
               connectTimeout: const Duration(seconds: 15),
               receiveTimeout: const Duration(seconds: 20),
-            ));
+            )) {
+    auth?.attachCookies(_dio);
+  }
 
   Future<Map<String, dynamic>> _post(String path, Map<String, dynamic> data) async {
     final resp = await _dio.post<dynamic>(

@@ -10,6 +10,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
+import 'fake_auth.dart';
 import 'package:qinyin/core/utils.dart';
 import 'package:qinyin/main.dart';
 import 'package:qinyin/models/models.dart';
@@ -70,6 +71,7 @@ Widget shellApp(PlayerService player) {
       ChangeNotifierProvider.value(
           value: DownloadService(resolver, player.settings)),
       ChangeNotifierProvider.value(value: player),
+      ChangeNotifierProvider.value(value: testAuthService),
       Provider.value(value: resolver),
       Provider<QishuiService>.value(value: QishuiService()),
     ],
@@ -205,6 +207,7 @@ void main() {
           ChangeNotifierProvider.value(
               value: DownloadService(resolver, settings)),
           ChangeNotifierProvider.value(value: player),
+          ChangeNotifierProvider.value(value: testAuthService),
           Provider.value(value: resolver),
           Provider<QishuiService>.value(value: QishuiService()),
         ],

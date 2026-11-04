@@ -17,6 +17,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
+import 'fake_auth.dart';
 import 'package:qinyin/main.dart';
 import 'package:qinyin/models/models.dart';
 import 'package:qinyin/services/download_service.dart';
@@ -178,6 +179,7 @@ void main() {
           ChangeNotifierProvider.value(value: library),
           ChangeNotifierProvider.value(value: downloads),
           ChangeNotifierProvider.value(value: player),
+          ChangeNotifierProvider.value(value: testAuthService),
           Provider.value(value: resolver),
           Provider<QishuiService>.value(value: QishuiService()),
         ],
@@ -234,6 +236,7 @@ void main() {
           ChangeNotifierProvider.value(value: library),
           ChangeNotifierProvider.value(value: downloads),
           ChangeNotifierProvider.value(value: player),
+          ChangeNotifierProvider.value(value: testAuthService),
           Provider.value(value: resolver),
           Provider<QishuiService>.value(value: QishuiService()),
         ],
