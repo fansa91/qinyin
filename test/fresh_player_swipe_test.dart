@@ -80,22 +80,27 @@ void main() {
       ),
     );
     await pumpFrames(tester);
-    expect(find.byType(PageView), findsOneWidget);
+    // 纵向分页器（切歌）与封面区横向分页器（歌词）并存，按方向区分
+    final verticalPager = find.byWidgetPredicate(
+        (w) => w is PageView && w.scrollDirection == Axis.vertical);
+    final horizontalPager = find.byWidgetPredicate(
+        (w) => w is PageView && w.scrollDirection == Axis.horizontal);
+    expect(verticalPager, findsOneWidget);
     expect(find.text('歌曲1'), findsOneWidget);
 
     // 上滑 → 下一首
-    await tester.fling(find.byType(PageView), const Offset(0, -500), 1200);
+    await tester.fling(verticalPager, const Offset(0, -500), 1200);
     await pumpFrames(tester);
     expect(player.currentIndex, 1, reason: '上滑应推进到下一首');
     expect(find.text('歌曲2'), findsOneWidget);
 
     // 再上滑 → 第三首
-    await tester.fling(find.byType(PageView), const Offset(0, -500), 1200);
+    await tester.fling(verticalPager, const Offset(0, -500), 1200);
     await pumpFrames(tester);
     expect(player.currentIndex, 2);
 
     // 下滑 → 上一首
-    await tester.fling(find.byType(PageView), const Offset(0, 500), 1200);
+    await tester.fling(verticalPager, const Offset(0, 500), 1200);
     await pumpFrames(tester);
     expect(player.currentIndex, 1, reason: '下滑应回到上一首');
     expect(find.text('歌曲2'), findsOneWidget);
@@ -107,6 +112,38 @@ void main() {
     unawaited(player.prev());
     await pumpFrames(tester);
     expect(player.currentIndex, 1);
+
+    // ── 移动端播放页新交互（页签已撤）：封面区横向分页进歌词页 ──
+    // 无歌词/评论页签
+    expect(find.byType(SegmentedButton<int>), findsNothing,
+        reason: '移动端播放页不应再有歌词/评论页签');
+    expect(horizontalPager, findsWidgets);
+    final hPager = tester.widget<PageView>(horizontalPager.first);
+    expect(hPager.controller?.page, 1, reason: '横向分页初始停在封面页');
+    // 右滑 → 歌词页（page=0），且不切歌（纵向队列下标不动）
+    await tester.fling(horizontalPager.first, const Offset(500, 0), 1200);
+    await pumpFrames(tester);
+    expect(tester.widget<PageView>(horizontalPager.first).controller?.page, 0,
+        reason: '右滑应进入歌词页');
+    expect(find.text('一行歌词'), findsWidgets, reason: '歌词页应显示歌词行');
+    expect(player.currentIndex, 1, reason: '横向滑动不应触发切歌');
+
+    // 左滑回封面页（page=1）
+    await tester.fling(horizontalPager.first, const Offset(-500, 0), 1200);
+    await pumpFrames(tester);
+    expect(tester.widget<PageView>(horizontalPager.first).controller?.page, 1,
+        reason: '左滑应回到封面页');
+
+    // 评论改遮盖式抽屉：点评论入口弹出 BottomSheet（底层页不动）
+    await tester.tap(find.byIcon(Icons.mode_comment_outlined).first);
+    await pumpFrames(tester);
+    expect(find.byType(BottomSheet), findsOneWidget,
+        reason: '评论应以遮盖式抽屉弹出');
+    expect(find.byType(CommentsList), findsOneWidget);
+    // 点遮罩关闭
+    await tester.tapAt(const Offset(10, 10));
+    await pumpFrames(tester);
+    expect(find.byType(BottomSheet), findsNothing);
 
     player.dispose(); // 取消周期存进度 Timer，过框架不变量检查
   });

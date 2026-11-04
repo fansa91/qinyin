@@ -1,7 +1,8 @@
 // 推荐页五项修整验收（移动端）：
 // 1) 顶部 SafeArea 已包（iPhone 状态栏重叠的代码级防线；真机 inset
 //    观感待真机验，测试环境 viewPadding=0 只断言结构在位）；
-// 2) 底部三键行（发现/播放/我的）已去掉，换成与播放页同一 SeekBar；
+// 2) 三键行（发现/播放/我的）已去掉；进度条 + 播放/暂停键移到
+//    封面正下方（控制行），歌词页底部同置一份控制行；
 // 3) 横向分页：初始停推荐流页，右滑进歌词页、左滑返回；纵向滑切歌
 //    不被横向分页吞（歌词页上纵向滑同样切歌）；
 // 4) 评论走遮盖式抽屉：≈50% 屏高浮层、底层页面原地不动、点遮罩关闭；
@@ -9,6 +10,8 @@
 //
 // 手法与 fresh_player_swipe_test 一致：测试环境无音频插件，播放
 // future 不完成，断言只验证 UI/手势/队列下标链；有界 pump 不 settle。
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -22,6 +25,7 @@ import 'package:qinyin/services/play_resolver.dart';
 import 'package:qinyin/services/player_service.dart';
 import 'package:qinyin/services/qishui_service.dart';
 import 'package:qinyin/services/settings_service.dart';
+import 'package:qinyin/widgets/cover_image.dart';
 import 'package:qinyin/widgets/mini_player.dart';
 import 'package:qinyin/widgets/seek_bar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -78,15 +82,16 @@ void main() {
     await library.init();
     final resolver = PlayResolver((id) async => fakeSeo(id));
     final player = PlayerService(resolver, settings, library);
-    player.queue.setQueue(
+    // 会话隔离口径：推荐页展示的是推荐会话，用专用入口建会话
+    // （状态同步落位；播放 future 在测试环境不完成，与既有口径同）
+    unawaited(player.startRecommendSession(
       [
         Track(id: '1', name: '歌曲1'),
         Track(id: '2', name: '歌曲2'),
         Track(id: '3', name: '歌曲3'),
       ],
       0,
-    );
-    player.queueTag = PlayerService.recommendQueueTag;
+    ));
 
     await tester.pumpWidget(
       MultiProvider(
@@ -110,8 +115,41 @@ void main() {
       reason: '推荐页应整体包在 SafeArea 里防状态栏重叠',
     );
 
-    // 2) 底部是 SeekBar，三键行（发现/我的）已不存在
-    expect(find.byType(SeekBar), findsOneWidget);
+    // 2) 控制行在封面正下方：至少一条 SeekBar 紧贴大封面下缘、
+    // 位于歌名之上（歌词页底部同置一份控制行，故按位置断言而非
+    // 计数）；控制行带播放/暂停键；三键行（发现/我的）不存在
+    final bigCover = find.byWidgetPredicate(
+        (w) => w is CoverImage && (w.height ?? 0) > 100);
+    expect(bigCover, findsWidgets);
+    final coverRect = tester.getRect(bigCover.first);
+    final titleRect = tester.getRect(find.text('歌曲1').first);
+    final seekRects = find
+        .byType(SeekBar)
+        .evaluate()
+        .map((e) => tester.getRect(find.byWidget(e.widget)))
+        .toList();
+    expect(
+      seekRects.any((r) =>
+          r.top >= coverRect.bottom - 2 &&
+          r.bottom <= titleRect.top + 2 &&
+          r.left >= coverRect.left - 1 &&
+          r.right <= coverRect.right + 1),
+      isTrue,
+      reason: '进度条应紧贴封面下方、歌名之上（封面下控制行）',
+    );
+    expect(
+      find.descendant(
+        of: find.byType(RecommendScreen),
+        matching: find.byWidgetPredicate((w) =>
+            w is IconButton &&
+            w.icon is Icon &&
+            {Icons.play_arrow, Icons.pause, Icons.hourglass_top}
+                .contains((w.icon as Icon).icon)),
+      ),
+      findsWidgets,
+      reason: '控制行应带播放/暂停键（测试环境播放 future 不完成，'
+          '图标可能停在加载态 hourglass）',
+    );
     expect(
       find.descendant(
           of: find.byType(RecommendScreen), matching: find.text('发现')),

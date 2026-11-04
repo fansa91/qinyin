@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -13,6 +15,7 @@ import 'screens/player_screen.dart';
 import 'screens/recommend_screen.dart';
 import 'screens/search_screen.dart';
 import 'screens/settings_screen.dart';
+import 'services/cache_service.dart';
 import 'services/download_service.dart';
 import 'services/library_service.dart';
 import 'services/lossless_cache.dart';
@@ -29,10 +32,16 @@ void main() async {
   final library = LibraryService();
   await library.init();
   final service = QishuiService();
-  final resolver =
-      PlayResolver(service.seoTrack, losslessCache: LosslessCache());
+  final resolver = PlayResolver(
+    service.seoTrack,
+    losslessCache: LosslessCache(),
+  );
   final downloads = DownloadService(resolver, settings);
   await downloads.init();
+  final cache = CacheService(downloadDirProvider: downloads.downloadDirectory);
+  // 启动清扫孤儿临时件（无损解密中间件 + 写标签 .qytag 残留）：保守
+  // 后缀口径、内部全程吞错，不阻塞启动、不碰用户文件。
+  unawaited(cache.sweepOrphanTemps());
   final player = PlayerService(resolver, settings, library);
   player.localFileFor = downloads.localPathFor;
   // 系统动态取色：启动时取一次系统调色板主色作种子（取不到则回落默认种子）
@@ -53,6 +62,7 @@ void main() async {
       resolver: resolver,
       downloads: downloads,
       player: player,
+      cache: cache,
       systemSeed: systemSeed,
     ),
   );
@@ -65,6 +75,7 @@ class QinyinApp extends StatelessWidget {
   final PlayResolver resolver;
   final DownloadService downloads;
   final PlayerService player;
+  final CacheService cache;
   final Color? systemSeed;
 
   const QinyinApp({
@@ -75,6 +86,7 @@ class QinyinApp extends StatelessWidget {
     required this.resolver,
     required this.downloads,
     required this.player,
+    required this.cache,
     this.systemSeed,
   });
 
@@ -86,6 +98,7 @@ class QinyinApp extends StatelessWidget {
         ChangeNotifierProvider.value(value: library),
         ChangeNotifierProvider.value(value: downloads),
         ChangeNotifierProvider.value(value: player),
+        Provider.value(value: cache),
         Provider.value(value: service),
         Provider.value(value: resolver),
       ],
@@ -98,16 +111,14 @@ class QinyinApp extends StatelessWidget {
           final isDesktop = switch (defaultTargetPlatform) {
             TargetPlatform.windows ||
             TargetPlatform.macOS ||
-            TargetPlatform.linux =>
-              true,
+            TargetPlatform.linux => true,
             _ => false,
           };
           return MaterialApp(
             title: '沁音',
             debugShowCheckedModeBanner: false,
             theme: buildTheme(brightness: Brightness.light, seedColor: seed),
-            darkTheme:
-                buildTheme(brightness: Brightness.dark, seedColor: seed),
+            darkTheme: buildTheme(brightness: Brightness.dark, seedColor: seed),
             themeMode: settings.themeMode,
             // 桌面键盘切歌/播放暂停（见 playback_shortcuts.dart 的避让说明）：
             // 叠加在默认快捷键之上，移动端不装。
@@ -168,17 +179,15 @@ class _AppShellState extends State<AppShell> {
   }
 
   List<Widget> get _pages => [
-        const HomeScreen(),
-        RecommendScreen(
-          active: _currentIndex == 1,
-        ),
-        const DownloadsScreen(),
-        LibraryScreen(
-          // 页签变化时重建 DefaultTabController 使 initialTab 生效
-          key: ValueKey('library-$_libraryTab'),
-          initialTab: _libraryTab,
-        ),
-      ];
+    const HomeScreen(),
+    RecommendScreen(active: _currentIndex == 1),
+    const DownloadsScreen(),
+    LibraryScreen(
+      // 页签变化时重建 DefaultTabController 使 initialTab 生效
+      key: ValueKey('library-$_libraryTab'),
+      initialTab: _libraryTab,
+    ),
+  ];
 
   void _openPlayer() {
     if (context.read<PlayerService>().hasQueue) {
@@ -202,20 +211,53 @@ class _AppShellState extends State<AppShell> {
     return Focus(autofocus: true, child: child);
   }
 
-  /// 推荐页（下标 1）自带完整播放面（封面 + SeekBar + 队列推进），
-  /// 再叠一条 mini 播放条纯属重复 → 移动壳层在该页隐藏 mini 条；
-  /// 直接从布局列里摘掉（不留占位），页面内容自然补满，无空白/跳动。
-  /// 桌面 expanded 不在此列：其双栏播放页没有自带底栏，通栏条要留。
+  /// 推荐页（下标 1）自带完整播放面（封面下控制行 + 队列推进），
+  /// 再叠一条播放条纯属重复 → **三档壳层统一**在该页隐藏播放条
+  /// （用户定版：桌面端同样隐藏，桌面推荐页的控制靠 DesktopPlayer
+  /// 内嵌的封面下控制行）。隐藏时直接不进树，无占位残留。
   bool get _showMiniPlayer => _currentIndex != 1;
+
+  /// 移动壳层悬浮播放条的横向边距（宽条形态：接近满宽、两侧小边距）
+  static const double _floatingBarMargin = 12;
+
+  /// 悬浮条占位避让：页面内容区底部留白，须 ≥ 条高 + 下边距 + 呼吸间隙，
+  /// 保证列表滑到底不被悬浮条遮住关键行。compact 条高实测约 68
+  /// （文本列/按钮列高于封面 44，主导行高 + 上下 padding 16 + 进度
+  /// 线 2）；medium 的 fullBar 另加顶部 SeekBar（Slider 约 48，
+  /// 总高约 116）。
+  static const double _compactBarClearance = 94;
+  static const double _mediumBarClearance = 140;
+
+  /// 内容区底部避让包装：只在「mini 条真有内容（主会话占用输出且
+  /// 有曲目）且本页要显示播放条」时留白（Selector 只盯这个布尔，
+  /// 不随进度通知重建整页；推荐会话占用输出时 mini 条隐藏、无留白）。
+  Widget _pagesWithClearance({required double clearance}) {
+    return Selector<PlayerService, bool>(
+      selector: (_, p) => p.miniBarHasContent,
+      builder: (context, hasTrack, child) => Padding(
+        padding: EdgeInsets.only(
+          bottom: _showMiniPlayer && hasTrack ? clearance : 0,
+        ),
+        child: child,
+      ),
+      child: IndexedStack(index: _currentIndex, children: _pages),
+    );
+  }
 
   Widget _buildCompact() {
     return Scaffold(
-      body: Column(
+      body: Stack(
         children: [
-          Expanded(
-            child: IndexedStack(index: _currentIndex, children: _pages),
+          Positioned.fill(
+            child: _pagesWithClearance(clearance: _compactBarClearance),
           ),
-          if (_showMiniPlayer) MiniPlayer(onTapCover: _openPlayer),
+          if (_showMiniPlayer)
+            Positioned(
+              left: _floatingBarMargin,
+              right: _floatingBarMargin,
+              bottom: _floatingBarMargin,
+              child: MiniPlayer(onTapCover: _openPlayer, floating: true),
+            ),
         ],
       ),
       bottomNavigationBar: NavigationBar(
@@ -249,9 +291,9 @@ class _AppShellState extends State<AppShell> {
 
   Widget _buildMedium() {
     return Scaffold(
-      body: Column(
+      body: Stack(
         children: [
-          Expanded(
+          Positioned.fill(
             child: Row(
               children: [
                 NavigationRail(
@@ -265,25 +307,42 @@ class _AppShellState extends State<AppShell> {
                   ),
                   destinations: const [
                     NavigationRailDestination(
-                        icon: Icon(Icons.home_outlined), label: Text('首页')),
+                      icon: Icon(Icons.home_outlined),
+                      label: Text('首页'),
+                    ),
                     NavigationRailDestination(
-                        icon: Icon(Icons.recommend_outlined),
-                        label: Text('推荐')),
+                      icon: Icon(Icons.recommend_outlined),
+                      label: Text('推荐'),
+                    ),
                     NavigationRailDestination(
-                        icon: Icon(Icons.download_outlined),
-                        label: Text('下载')),
+                      icon: Icon(Icons.download_outlined),
+                      label: Text('下载'),
+                    ),
                     NavigationRailDestination(
-                        icon: Icon(Icons.person_outline), label: Text('我的')),
+                      icon: Icon(Icons.person_outline),
+                      label: Text('我的'),
+                    ),
                   ],
                 ),
                 const VerticalDivider(thickness: 1, width: 1),
                 Expanded(
-                  child: IndexedStack(index: _currentIndex, children: _pages),
+                  child: _pagesWithClearance(clearance: _mediumBarClearance),
                 ),
               ],
             ),
           ),
-          if (_showMiniPlayer) MiniPlayer(onTapCover: _openPlayer, fullBar: true),
+          if (_showMiniPlayer)
+            Positioned(
+              // 避开左侧 NavigationRail（宽 80 + 分隔线 1），只浮在内容区上方
+              left: 81 + _floatingBarMargin,
+              right: _floatingBarMargin,
+              bottom: _floatingBarMargin,
+              child: MiniPlayer(
+                onTapCover: _openPlayer,
+                fullBar: true,
+                floating: true,
+              ),
+            ),
         ],
       ),
     );
@@ -298,93 +357,105 @@ class _AppShellState extends State<AppShell> {
           Expanded(
             child: Row(
               children: [
-                Container(
+                SizedBox(
                   width: 232,
-                  color: scheme.surfaceContainerLow,
-                  child: ListView(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 4, 16, 16),
-                        child: Row(
-                          children: [
-                            CircleAvatar(
-                              backgroundColor: scheme.primaryContainer,
-                              child: Icon(Icons.music_note,
-                                  color: scheme.onPrimaryContainer),
-                            ),
-                            const SizedBox(width: 10),
-                            Text('沁音',
-                                style: Theme.of(context).textTheme.titleLarge),
-                          ],
-                        ),
-                      ),
-                      _SideItem(
-                        icon: Icons.recommend_outlined,
-                        label: '推荐',
-                        selected: _currentIndex == 1,
-                        onTap: () => setState(() => _currentIndex = 1),
-                      ),
-                      _SideItem(
-                        icon: Icons.explore_outlined,
-                        label: '发现',
-                        selected: _currentIndex == 0,
-                        onTap: () => setState(() => _currentIndex = 0),
-                      ),
-                      const _SideHeader('我的音乐'),
-                      _SideItem(
-                        icon: Icons.favorite_border,
-                        label: '我喜欢的音乐',
-                        selected: _currentIndex == 3 && _libraryTab == 0,
-                        onTap: () => _goLibrary(0),
-                      ),
-                      _SideItem(
-                        icon: Icons.history,
-                        label: '历史播放',
-                        selected: _currentIndex == 3 && _libraryTab == 3,
-                        onTap: () => _goLibrary(3),
-                      ),
-                      _SideItem(
-                        icon: Icons.download_outlined,
-                        label: '下载管理',
-                        selected: _currentIndex == 2,
-                        onTap: () => setState(() => _currentIndex = 2),
-                      ),
-                      const _SideHeader('创建的歌单'),
-                      for (final p in library.myPlaylists)
-                        _SideItem(
-                          icon: Icons.queue_music,
-                          label: p.name,
-                          selected: false,
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute<void>(
-                              builder: (_) =>
-                                  LocalPlaylistScreen(playlistId: p.id),
-                            ),
+                  // 底色由 Material 承载而非 ColoredBox：侧栏 ListTile
+                  // 的 ink/选中底需要画在最近的 Material 上，夹一层
+                  // ColoredBox 会触发框架断言且水波纹不可见
+                  child: Material(
+                    color: scheme.surfaceContainerLow,
+                    child: ListView(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 4, 16, 16),
+                          child: Row(
+                            children: [
+                              CircleAvatar(
+                                backgroundColor: scheme.primaryContainer,
+                                child: Icon(
+                                  Icons.music_note,
+                                  color: scheme.onPrimaryContainer,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Text(
+                                '沁音',
+                                style: Theme.of(context).textTheme.titleLarge,
+                              ),
+                            ],
                           ),
                         ),
-                      if (library.myPlaylists.isEmpty)
-                        const Padding(
-                          padding: EdgeInsets.fromLTRB(20, 2, 16, 2),
-                          child: Text('暂无（在「我的」中新建）',
-                              style: TextStyle(fontSize: 12)),
+                        _SideItem(
+                          icon: Icons.recommend_outlined,
+                          label: '推荐',
+                          selected: _currentIndex == 1,
+                          onTap: () => setState(() => _currentIndex = 1),
                         ),
-                      const _SideHeader('收藏的歌单和专辑'),
-                      _SideItem(
-                        icon: Icons.collections_bookmark_outlined,
-                        label: '我的收藏',
-                        selected: _currentIndex == 3 && _libraryTab == 1,
-                        onTap: () => _goLibrary(1),
-                      ),
-                      const Divider(height: 24),
-                      _SideItem(
-                        icon: Icons.settings_outlined,
-                        label: '设置',
-                        selected: false,
-                        onTap: () => Navigator.pushNamed(context, '/settings'),
-                      ),
-                    ],
+                        _SideItem(
+                          icon: Icons.explore_outlined,
+                          label: '发现',
+                          selected: _currentIndex == 0,
+                          onTap: () => setState(() => _currentIndex = 0),
+                        ),
+                        const _SideHeader('我的音乐'),
+                        _SideItem(
+                          icon: Icons.favorite_border,
+                          label: '我喜欢的音乐',
+                          selected: _currentIndex == 3 && _libraryTab == 0,
+                          onTap: () => _goLibrary(0),
+                        ),
+                        _SideItem(
+                          icon: Icons.history,
+                          label: '历史播放',
+                          selected: _currentIndex == 3 && _libraryTab == 3,
+                          onTap: () => _goLibrary(3),
+                        ),
+                        _SideItem(
+                          icon: Icons.download_outlined,
+                          label: '下载管理',
+                          selected: _currentIndex == 2,
+                          onTap: () => setState(() => _currentIndex = 2),
+                        ),
+                        const _SideHeader('创建的歌单'),
+                        for (final p in library.myPlaylists)
+                          _SideItem(
+                            icon: Icons.queue_music,
+                            label: p.name,
+                            selected: false,
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute<void>(
+                                builder: (_) =>
+                                    LocalPlaylistScreen(playlistId: p.id),
+                              ),
+                            ),
+                          ),
+                        if (library.myPlaylists.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.fromLTRB(20, 2, 16, 2),
+                            child: Text(
+                              '暂无（在「我的」中新建）',
+                              style: TextStyle(fontSize: 12),
+                            ),
+                          ),
+                        const _SideHeader('收藏的歌单和专辑'),
+                        _SideItem(
+                          icon: Icons.collections_bookmark_outlined,
+                          label: '我的收藏',
+                          selected: _currentIndex == 3 && _libraryTab == 1,
+                          onTap: () => _goLibrary(1),
+                        ),
+                        const Divider(height: 24),
+                        _SideItem(
+                          icon: Icons.settings_outlined,
+                          label: '设置',
+                          selected: false,
+                          onTap: () =>
+                              Navigator.pushNamed(context, '/settings'),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 const VerticalDivider(thickness: 1, width: 1),
@@ -394,7 +465,10 @@ class _AppShellState extends State<AppShell> {
               ],
             ),
           ),
-          MiniPlayer(onTapCover: _openPlayer, fullBar: true),
+          // 桌面通栏条保持布局式（不悬浮）；推荐页隐藏（三档统一口径，
+          // 见 _showMiniPlayer）。
+          if (_showMiniPlayer)
+            MiniPlayer(onTapCover: _openPlayer, fullBar: true),
         ],
       ),
     );
@@ -411,8 +485,8 @@ class _SideHeader extends StatelessWidget {
       child: Text(
         text,
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
       ),
     );
   }
@@ -445,4 +519,3 @@ class _SideItem extends StatelessWidget {
     );
   }
 }
-

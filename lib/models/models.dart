@@ -51,6 +51,40 @@ class CoverArt {
   }
 }
 
+/// 平台场景模式（feed/mode 场景音乐块，2026-11-04 实测共 45 项）：
+/// 名称 + scene_mode_id + 图标。取流时把 [sceneModeId] 作为
+/// feed/song-tab 的 scene 参数（GSQZ 口径，本仓已实测零重叠差异）。
+class FeedMode {
+  final String name;
+  final String sceneModeId;
+  final String subQueueType;
+  final CoverArt cover;
+
+  const FeedMode({
+    required this.name,
+    required this.sceneModeId,
+    this.subQueueType = '',
+    this.cover = const CoverArt(uri: '', urls: []),
+  });
+
+  /// 解析 feed_mode_block 里的一项 entity；无 scene_mode_id 的项
+  /// （如偏好类条目）不是场景，返回 null。
+  static FeedMode? fromEntity(Map<String, dynamic> entity) {
+    final fm = entity['feed_mode'] as Map<String, dynamic>?;
+    if (fm == null) return null;
+    final scene = fm['scene_mode'] as Map<String, dynamic>?;
+    final id = _str(scene?['scene_mode_id']);
+    final name = _str(fm['text']);
+    if (id.isEmpty || name.isEmpty) return null;
+    return FeedMode(
+      name: name,
+      sceneModeId: id,
+      subQueueType: _str(scene?['sub_queue_type']),
+      cover: CoverArt.fromJson(fm['url_info'] as Map<String, dynamic>?),
+    );
+  }
+}
+
 String _str(dynamic v) => v == null ? '' : '$v';
 int _int(dynamic v) => v is int ? v : (v is num ? v.toInt() : int.tryParse('$v') ?? 0);
 

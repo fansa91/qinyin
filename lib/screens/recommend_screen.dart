@@ -12,6 +12,7 @@ import '../services/settings_service.dart';
 import '../widgets/cover_image.dart';
 import '../widgets/fresh_pager.dart';
 import '../widgets/seek_bar.dart';
+import '../widgets/track_badges.dart';
 import 'player_screen.dart';
 
 /// 推荐：页面本体就是新鲜模式播放形态（定版样板图口径）。
@@ -24,19 +25,23 @@ import 'player_screen.dart';
 /// 形态：直接复用 [FreshPager]（与播放页同一份纵向 PageView + 队列推进
 /// 实现），队列就是推荐流，队尾 loadMore 接 [RecommendPager]。
 /// 单页内部再套一层横向分页：右滑进当前曲的歌词页、左滑回推荐流页；
-/// 底部是可拖动 SeekBar（无「发现/播放/我的」三键行——回首页/我的走
-/// 壳层导航）；点评论开遮盖式抽屉（浮层盖住本页、底层不动）。
+/// 进度条与播放/暂停键在封面正下方（控制行），歌词页底部同置一份；
+/// 点评论开遮盖式抽屉（浮层盖住本页、底层不动）。
 /// 整个页面包在 SafeArea 里：本页是壳层里唯一没有 AppBar 的主页面，
 /// 不包就会与 iPhone 状态栏时间重叠（用户实报）。
-/// 桌面端（≥900）沿用现有双栏播放页 [DesktopPlayer]，不强求滑动。
+/// 桌面端（≥900）沿用现有双栏播放页 [DesktopPlayer]（embedded 形态），
+/// 不强求滑动。
+/// 页头带场景入口（车机 feed/mode 45 种场景）：点 chip 开网格选择层，
+/// 选中后以该场景重建推荐流，选择持久化；清单拉取失败时入口缺席。
 ///
-/// 进页衔接策略（不打断优先）：
-/// - 队列已是推荐流 → 直接展示，什么都不动；
-/// - 有别的来源的曲目在播/已载入 → 不抢队列，先出提示页，
-///   用户显式动作才接管：若推荐会话此前被该来源接管挂起
-///   （PlayerService 的会话快照），主按钮是「继续刷推荐」从暂停处
-///   恢复原会话；否则是「开始刷推荐」新建会话；
-/// - 什么都没在播 → 首次切到本页时自动以推荐流建队起播。
+/// 进页衔接策略（会话隔离，用户定版）：
+/// - 推荐会话已有内容 → 直接展示会话当前状态（曲目/下标/位置），
+///   无论它是否正占用输出；
+/// - 推荐会话为空、主会话有内容 → 提示页：不打断主会话，用户点
+///   「开始刷推荐」才建推荐会话接管输出（主会话暂停存档）；
+/// - 两边都空 → 首次切到本页时自动建推荐会话起播。
+/// 推荐播放是独立会话：不唤起 MiniPlayer、不与主队列互相传递
+/// （见 PlayerService 的会话隔离说明）。
 class RecommendScreen extends StatefulWidget {
   /// 当前是否被选中展示（IndexedStack 下靠它感知「进入本页」）
   final bool active;
@@ -51,14 +56,18 @@ class RecommendScreen extends StatefulWidget {
 
 enum RecommendEnter { showPager, showGate, startQueue }
 
-/// 进页决策（纯函数，可测）：见 RecommendScreen 类注释的衔接策略
+/// 进页决策（纯函数，可测）：会话隔离口径——
+/// - 推荐会话自己已有内容（占用输出中或已预置/暂停）→ 直接展示
+///   会话当前状态（showPager）；
+/// - 推荐会话为空、主会话有内容 → 提示页（showGate）：不打断主
+///   会话，用户点「开始刷推荐」才以推荐会话接管输出；
+/// - 两边都空 → 首次进入自动建会话起播（startQueue）。
 RecommendEnter decideRecommendEnter({
-  required bool queueIsRecommend,
-  required bool hasQueue,
-  required bool hasCurrentTrack,
+  required bool sessionHasContent,
+  required bool mainHasContent,
 }) {
-  if (queueIsRecommend && hasQueue) return RecommendEnter.showPager;
-  if (hasCurrentTrack) return RecommendEnter.showGate;
+  if (sessionHasContent) return RecommendEnter.showPager;
+  if (mainHasContent) return RecommendEnter.showGate;
   return RecommendEnter.startQueue;
 }
 
@@ -70,6 +79,23 @@ class _RecommendScreenState extends State<RecommendScreen> {
   bool _enterHandled = false;
   bool _starting = false;
   bool _startFailed = false;
+
+  /// 车机平台服务（单例复用：令牌与场景清单都有会话缓存，别每次新建）
+  PlatformFeedService? _platform;
+
+  /// 场景清单：null = 尚未拉到（入口不显示）；拉取失败保持 null，
+  /// 场景入口优雅隐藏，默认流不受影响。
+  List<FeedMode>? _modes;
+
+  /// 当前选定场景（null = 默认推荐）；进页时从持久化恢复。
+  FeedMode? _scene;
+
+  Future<PlatformFeedService> _platformService() async {
+    final existing = _platform;
+    if (existing != null) return existing;
+    final deviceId = await PlatformFeedService.loadOrCreateDeviceId();
+    return _platform = PlatformFeedService(deviceId: deviceId);
+  }
 
   @override
   void initState() {
@@ -91,13 +117,13 @@ class _RecommendScreenState extends State<RecommendScreen> {
   }
 
   /// 构造一个全新的分页器（初始构造与「刷新换一批」共用同一条路，
-  /// 保证刷新是真重建而不是假动作）。
+  /// 保证刷新是真重建而不是假动作）。主源取流闭包带上当前场景
+  /// （[_scene]），切换场景 = 以新场景重建分页器重拉。
   Future<RecommendPager> _createPager() async {
     final service = context.read<QishuiService>();
     // 主源（车机开放平台官方推荐流）不依赖 homeFeed：
     // homeFeed 只为回退源提供电台与歌单快照，失败时单独兜底为空
-    final deviceId = await PlatformFeedService.loadOrCreateDeviceId();
-    final platform = PlatformFeedService(deviceId: deviceId);
+    final platform = await _platformService();
     HomeFeed? feed;
     try {
       feed = await service.homeFeed();
@@ -105,7 +131,8 @@ class _RecommendScreenState extends State<RecommendScreen> {
       feed = null;
     }
     return RecommendPager(
-      fetchPlatformPage: (cursor) => platform.songTabPage(cursor),
+      fetchPlatformPage: (cursor) =>
+          platform.songTabPage(cursor, sceneModeId: _scene?.sceneModeId),
       fetchRelated: service.relatedTracks,
       fetchPlaylistList: (cursor) => service.discoverMix(cursor: cursor),
       fetchPlaylistTracks: (id, {cursor}) =>
@@ -121,22 +148,45 @@ class _RecommendScreenState extends State<RecommendScreen> {
 
   Future<void> _init() async {
     try {
+      // 先恢复上次选定的场景（持久化），分页器一出生就带场景
+      final saved = await PlatformFeedService.loadSavedScene();
+      if (saved != null) {
+        _scene = FeedMode(name: saved.name, sceneModeId: saved.id);
+      }
       _pager = await _createPager();
       if (mounted) setState(() => _initError = null);
+      _loadModes();
     } catch (e) {
       if (mounted) setState(() => _initError = '加载失败，请检查网络');
     }
   }
 
+  /// 拉场景清单（失败静默：入口不显示即可，默认流不受影响）
+  Future<void> _loadModes() async {
+    try {
+      final platform = await _platformService();
+      final modes = await platform.fetchFeedModes();
+      if (!mounted || modes.isEmpty) return;
+      setState(() {
+        _modes = modes;
+        // 持久化恢复的场景只有 id+名，对齐到清单里的完整条目（带图标）
+        final scene = _scene;
+        if (scene != null) {
+          for (final m in modes) {
+            if (m.sceneModeId == scene.sceneModeId) _scene = m;
+          }
+        }
+      });
+    } catch (_) {
+      // 场景入口优雅缺席，不提示、不影响推荐流
+    }
+  }
+
   bool _refreshing = false;
 
-  /// 刷新换一批：新建分页器重新拉第一批，成功才换队列；
-  /// 失败保留当前队列与已加载列表不动，只提示。刷新是用户显式动作，
-  /// 允许接管队列（与进页「不打断优先」不冲突）。
-  Future<void> _refresh() async {
-    if (_refreshing || _starting) return;
-    _refreshing = true;
-    if (mounted) setState(() {});
+  /// 以当前场景新建分页器并拉第一批，成功才写入 [_pager]/[_tracks]；
+  /// 失败两者保持原样、返回 false（刷新与切场景共用，保证都是真重建）。
+  Future<bool> _loadFirstPage() async {
     try {
       final pager = await _createPager();
       var first = await pager.nextPage();
@@ -144,25 +194,75 @@ class _RecommendScreenState extends State<RecommendScreen> {
       for (var i = 0; i < 2 && first.isEmpty && pager.hasMore; i++) {
         first = await pager.nextPage();
       }
-      if (first.isEmpty) {
-        throw StateError('推荐流返回空');
-      }
-      if (!mounted) return;
+      if (first.isEmpty) return false;
       _pager = pager;
       _tracks
         ..clear()
         ..addAll(first);
-      await context.read<PlayerService>().playQueue(
-            List.of(_tracks),
-            0,
-            loadMore: _fetchNext,
-            tag: PlayerService.recommendQueueTag,
-          );
+      return true;
     } catch (_) {
-      if (mounted) {
+      return false;
+    }
+  }
+
+  /// 刷新换一批：重新拉第一批，成功才换推荐会话；失败保留当前
+  /// 会话与已加载列表不动，只提示。刷新是用户在推荐页的显式动作，
+  /// 按隔离语义以新一批接管**推荐会话**（主会话只被暂停存档，
+  /// 内容不受影响）。
+  Future<void> _refresh() async {
+    if (_refreshing || _starting) return;
+    _refreshing = true;
+    if (mounted) setState(() {});
+    try {
+      final ok = await _loadFirstPage();
+      if (!mounted) return;
+      if (!ok) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('刷新失败，已保留当前内容')),
         );
+        return;
+      }
+      await context.read<PlayerService>().startRecommendSession(
+            List.of(_tracks),
+            0,
+            loadMore: _fetchNext,
+          );
+    } finally {
+      _refreshing = false;
+      if (mounted) setState(() {});
+    }
+  }
+
+  /// 切换场景（null = 回默认推荐）：持久化选择后按隔离语义走——
+  /// 推荐会话正占用输出、或主会话无内容时，直接以新场景重建推荐
+  /// 会话并起播；主会话正在占用输出时**不抢输出**，只把推荐会话
+  /// 的内容换成新场景的流（暂停态展示），用户在推荐页点播放才
+  /// 接管输出、主会话暂停存档。
+  Future<void> _applyScene(FeedMode? mode) async {
+    if (_refreshing || _starting) return;
+    if (mode?.sceneModeId == _scene?.sceneModeId) return;
+    _refreshing = true;
+    _scene = mode;
+    if (mounted) setState(() {});
+    try {
+      await PlatformFeedService.saveScene(mode);
+      final ok = await _loadFirstPage();
+      if (!mounted) return;
+      if (!ok) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('场景切换失败，已保留当前内容')),
+        );
+        return;
+      }
+      final player = context.read<PlayerService>();
+      if (player.recommendIsActive || !player.mainHasContent) {
+        await player.startRecommendSession(
+          List.of(_tracks),
+          0,
+          loadMore: _fetchNext,
+        );
+      } else {
+        player.setRecommendSession(List.of(_tracks), loadMore: _fetchNext);
       }
     } finally {
       _refreshing = false;
@@ -170,8 +270,9 @@ class _RecommendScreenState extends State<RecommendScreen> {
     }
   }
 
-  /// 页面与播放队列共用同一个分页器：队列续拉回来的曲目同步进已加载列表，
-  /// 刷着听、听着刷是同一条流。
+  /// 页面与推荐会话共用同一个分页器：会话续拉（占用输出时走
+  /// PlayerService 的队尾续拉；未占用时走推荐 store 的续拉）
+  /// 回来的曲目同步进已加载列表，刷着听、听着刷是同一条流。
   Future<List<Track>> _fetchNext() async {
     final pager = _pager;
     if (pager == null) return const [];
@@ -181,9 +282,8 @@ class _RecommendScreenState extends State<RecommendScreen> {
   }
 
   RecommendEnter _decide(PlayerService player) => decideRecommendEnter(
-        queueIsRecommend: player.queueTag == PlayerService.recommendQueueTag,
-        hasQueue: player.hasQueue,
-        hasCurrentTrack: player.currentTrack != null,
+        sessionHasContent: player.recommendHasContent,
+        mainHasContent: player.mainHasContent,
       );
 
   void _onEnter() {
@@ -219,11 +319,11 @@ class _RecommendScreenState extends State<RecommendScreen> {
       }
       final player = context.read<PlayerService>();
       if (!force && _decide(player) != RecommendEnter.startQueue) return;
-      await player.playQueue(
+      // 隔离口径：建的是推荐会话自己的队列，不动主队列
+      await player.startRecommendSession(
         List.of(_tracks),
         0,
         loadMore: _fetchNext,
-        tag: PlayerService.recommendQueueTag,
       );
     } catch (_) {
       if (mounted) setState(() => _startFailed = true);
@@ -240,11 +340,13 @@ class _RecommendScreenState extends State<RecommendScreen> {
     final Widget content;
     if (enter == RecommendEnter.showPager) {
       if (isExpanded(context)) {
-        // 桌面双栏播放形态之上保留推荐页头（刷新/列表/搜索入口不丢）
+        // 桌面双栏播放形态之上保留推荐页头（刷新/列表/搜索入口不丢）；
+        // embedded 口径：壳层通栏条在本页隐藏，控制行在 DesktopPlayer
+        // 封面下方，队列入口只留页头这一个
         content = Column(
           children: [
             _header(context),
-            const Expanded(child: DesktopPlayer()),
+            const Expanded(child: DesktopPlayer(embedded: true)),
           ],
         );
       } else {
@@ -263,7 +365,14 @@ class _RecommendScreenState extends State<RecommendScreen> {
     // 让开状态栏/刘海（iPhone 上 header 曾与状态栏时间重叠，用户实报）。
     // bottom 不包：页面下缘贴的是壳层导航栏而非屏幕边缘，导航栏自理
     // 底部 inset，包了反而多出一条空白。
-    return SafeArea(bottom: false, child: content);
+    // 整页底色垫「页面顶色」（当前推荐会话曲目的封面取色 55% 混
+    // 页面底色，与新鲜页渐变顶端同一公式）：状态栏区/header 一带
+    // 与页面正文同色、无色块分界；切歌换封面时此处与正文顶端
+    // 同步变色。桌面分支同口径（DesktopPlayer embedded 内部同色）。
+    return Container(
+      color: recommendPageTopColor(context, player.recommendCurrentTrack),
+      child: SafeArea(bottom: false, child: content),
+    );
   }
 
   Widget _header(BuildContext context) {
@@ -285,6 +394,16 @@ class _RecommendScreenState extends State<RecommendScreen> {
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                 ),
+                // 场景入口：清单拉到才出现（失败优雅缺席）；chip 上
+                // 显示当前场景名，未选时为「默认推荐」
+                if (_modes != null && _modes!.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  InputChip(
+                    avatar: const Icon(Icons.auto_awesome, size: 16),
+                    label: Text(_scene?.name ?? '默认推荐'),
+                    onPressed: _refreshing ? null : _showScenePicker,
+                  ),
+                ],
               ],
             ),
           ),
@@ -323,6 +442,9 @@ class _RecommendScreenState extends State<RecommendScreen> {
           child: Stack(
             children: [
               FreshPager(
+                // 绑定推荐会话视图（隔离）：页面/下标/切歌都只动
+                // 推荐会话自己，不读主队列
+                session: PlayerSession.recommend,
                 pageBuilder: (context, track, i) => _RecommendFreshPage(
                   track: track,
                   index: i,
@@ -343,10 +465,10 @@ class _RecommendScreenState extends State<RecommendScreen> {
   }
 
   Widget _pageDots(PlayerService player) {
-    final total = player.queueItems.length;
+    final total = player.recommendQueueItems.length;
     if (total < 2) return const SizedBox.shrink();
     const window = 9;
-    var start = player.currentIndex - window ~/ 2;
+    var start = player.recommendCurrentIndex - window ~/ 2;
     if (start < 0) start = 0;
     if (start + window > total) start = (total - window).clamp(0, total);
     final count = total - start > window ? window : total - start;
@@ -356,12 +478,12 @@ class _RecommendScreenState extends State<RecommendScreen> {
       children: [
         for (var k = 0; k < count; k++)
           Container(
-            width: (start + k) == player.currentIndex ? 7 : 5,
-            height: (start + k) == player.currentIndex ? 7 : 5,
+            width: (start + k) == player.recommendCurrentIndex ? 7 : 5,
+            height: (start + k) == player.recommendCurrentIndex ? 7 : 5,
             margin: const EdgeInsets.symmetric(vertical: 3),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: (start + k) == player.currentIndex
+              color: (start + k) == player.recommendCurrentIndex
                   ? scheme.primary
                   : scheme.onSurfaceVariant.withValues(alpha: 0.4),
             ),
@@ -371,13 +493,10 @@ class _RecommendScreenState extends State<RecommendScreen> {
   }
 
   Widget _buildGate(BuildContext context, PlayerService player) {
-    final t = player.currentTrack;
-    // 推荐会话曾被其他来源接管而挂起时，gate 的主动作是「从暂停处
-    // 继续」而不是从头重建：推荐与首页从来是同一条队列，交接只是
-    // 暂停+快照，恢复即原样回到离开时的曲目（见 PlayerService 的
-    // resumeRecommendQueue）。重新开始保留为次级入口。
-    final suspended =
-        player.hasSuspendedRecommend ? player.suspendedRecommendTrack : null;
+    // 会话隔离：推荐会话为空、主会话有内容时才到这里。推荐有自己
+    // 独立的会话，不存在「恢复主队列里的推荐会话」——点开始后以
+    // 推荐会话接管输出，主会话暂停并原样保留（回首页点播即恢复）。
+    final t = player.mainCurrentTrack;
     return Column(
       children: [
         _header(context),
@@ -405,38 +524,25 @@ class _RecommendScreenState extends State<RecommendScreen> {
                           ),
                     ),
                   const SizedBox(height: 6),
-                  Text(
-                    suspended != null
-                        ? '推荐流已暂停在《${suspended.name}》，可以从离开处继续'
-                        : '为不打断当前播放，推荐流还没有接管队列',
-                    style: const TextStyle(fontSize: 12),
+                  const Text(
+                    '推荐有独立的播放会话：开始后当前播放暂停存档，'
+                    '推荐曲目只在推荐页里播，不会出现在迷你播放条上',
+                    style: TextStyle(fontSize: 12),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 18),
-                  if (suspended != null) ...[
-                    FilledButton.icon(
-                      onPressed: () => player.resumeRecommendQueue(),
-                      icon: const Icon(Icons.play_arrow),
-                      label: const Text('继续刷推荐'),
-                    ),
-                    TextButton(
-                      onPressed:
-                          _starting ? null : () => _startQueue(force: true),
-                      child: const Text('重新开始推荐'),
-                    ),
-                  ] else
-                    FilledButton.icon(
-                      onPressed:
-                          _starting ? null : () => _startQueue(force: true),
-                      icon: _starting
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.play_arrow),
-                      label: const Text('开始刷推荐'),
-                    ),
+                  FilledButton.icon(
+                    onPressed:
+                        _starting ? null : () => _startQueue(force: true),
+                    icon: _starting
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.play_arrow),
+                    label: const Text('开始刷推荐'),
+                  ),
                 ],
               ),
             ),
@@ -498,8 +604,69 @@ class _RecommendScreenState extends State<RecommendScreen> {
     );
   }
 
+  /// 场景选择层：网格（图标 + 名称），首项「默认推荐」清场景。
+  /// 选中即走 [_applyScene]（持久化 + 按 gate/接管语义重建）。
+  void _showScenePicker() {
+    final modes = _modes;
+    if (modes == null || modes.isEmpty) return;
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => SafeArea(
+        child: SizedBox(
+          height: MediaQuery.of(ctx).size.height * 0.7,
+          child: Column(
+            children: [
+              const ListTile(title: Text('场景音乐')),
+              Expanded(
+                child: GridView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  gridDelegate:
+                      const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 3,
+                    mainAxisSpacing: 12,
+                    crossAxisSpacing: 12,
+                    childAspectRatio: 0.82,
+                  ),
+                  itemCount: modes.length + 1,
+                  itemBuilder: (_, i) {
+                    if (i == 0) {
+                      return _SceneTile(
+                        label: '默认推荐',
+                        icon: Icons.recommend_outlined,
+                        selected: _scene == null,
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          _applyScene(null);
+                        },
+                      );
+                    }
+                    final mode = modes[i - 1];
+                    return _SceneTile(
+                      label: mode.name,
+                      cover: mode.cover,
+                      selected: _scene?.sceneModeId == mode.sceneModeId,
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _applyScene(mode);
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   void _showLoadedList(BuildContext context) {
     final player = context.read<PlayerService>();
+    // 列表内容以推荐会话为准（隔离口径：不读主队列）；点选走
+    // recommendJumpTo——会话占用输出时切歌出声，未占用时只挪
+    // 会话下标。徽标与移动端 TrackTile 同一套（音质 + VIP）。
+    final items = player.recommendQueueItems;
     showModalBottomSheet<void>(
       context: context,
       builder: (ctx) => SafeArea(
@@ -510,23 +677,32 @@ class _RecommendScreenState extends State<RecommendScreen> {
             Flexible(
               child: ListView.builder(
                 shrinkWrap: true,
-                itemCount: _tracks.length,
+                itemCount: items.length,
                 itemBuilder: (_, i) {
-                  final t = _tracks[i];
+                  final t = items[i];
                   return ListTile(
                     leading: CoverImage(cover: t.cover, width: 40, height: 40),
-                    title: Text(t.name,
-                        maxLines: 1, overflow: TextOverflow.ellipsis),
+                    title: Row(
+                      children: [
+                        Flexible(
+                          child: Text(t.name,
+                              maxLines: 1, overflow: TextOverflow.ellipsis),
+                        ),
+                        if (t.topQuality.isNotEmpty) ...[
+                          const SizedBox(width: 6),
+                          QualityBadge(topQuality: t.topQuality),
+                        ],
+                        if (t.isVip) ...[
+                          const SizedBox(width: 6),
+                          const VipBadge(),
+                        ],
+                      ],
+                    ),
                     subtitle: Text(t.artistNames,
                         maxLines: 1, overflow: TextOverflow.ellipsis),
-                    selected: player.queueTag ==
-                            PlayerService.recommendQueueTag &&
-                        i == player.currentIndex,
+                    selected: i == player.recommendCurrentIndex,
                     onTap: () {
-                      if (player.queueTag ==
-                          PlayerService.recommendQueueTag) {
-                        player.jumpTo(i);
-                      }
+                      player.recommendJumpTo(i);
                       Navigator.pop(ctx);
                     },
                   );
@@ -541,7 +717,8 @@ class _RecommendScreenState extends State<RecommendScreen> {
 }
 
 /// 推荐页的新鲜模式单页（按定版样板图）：大封面（右上角实际音质芯片）、
-/// 歌名/歌手、一行当前歌词、只读互动计数排、下一首露出条，底部 SeekBar。
+/// 封面正下方控制行（可拖 SeekBar + 播放/暂停键）、歌名/歌手、
+/// 一行当前歌词、只读互动计数排。
 ///
 /// 页面内部再分横向两页（横向 PageView，初始停在推荐流页）：
 /// - 右滑 → 左侧的歌词页（当前曲歌词，同步滚动沿用播放页 [LyricList]）；
@@ -575,8 +752,10 @@ class _RecommendFreshPageState extends State<_RecommendFreshPage> {
   Widget build(BuildContext context) {
     final player = context.watch<PlayerService>();
     final resolver = context.read<PlayResolver>();
-    final isCurrent = player.currentIndex == widget.index;
-    final seo = isCurrent
+    // 隔离口径：当前页判定与 seo 都按推荐会话读——会话未占用输出
+    // 时引擎里是主会话的状态，绝不能拿来冒充推荐曲目的
+    final isCurrent = player.recommendCurrentIndex == widget.index;
+    final seo = isCurrent && player.recommendIsActive
         ? player.currentSeo ?? resolver.cachedSeo(widget.track.id)
         : resolver.cachedSeo(widget.track.id);
     return Container(
@@ -585,7 +764,9 @@ class _RecommendFreshPageState extends State<_RecommendFreshPage> {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            _tintOf(context).withValues(alpha: 0.55),
+            // 顶端用实色顶色（与推荐页顶部/header 同一公式同色，
+            // 无缝衔接；视觉与原半透明取色叠底色完全一致）
+            recommendPageTopColor(context, widget.track),
             Theme.of(context).scaffoldBackgroundColor,
           ],
         ),
@@ -597,21 +778,13 @@ class _RecommendFreshPageState extends State<_RecommendFreshPage> {
     );
   }
 
-  Color _tintOf(BuildContext context) {
-    final hex = widget.track.coverColorHex;
-    if (hex != null && hex.length == 6) {
-      final v = int.tryParse(hex, radix: 16);
-      if (v != null) return Color(0xFF000000 | v);
-    }
-    return Theme.of(context).colorScheme.primaryContainer;
-  }
-
   Widget _content(BuildContext context, SeoTrack? seo, bool isCurrent) {
     final player = context.watch<PlayerService>();
     final scheme = Theme.of(context).colorScheme;
     final fullTrack = seo?.track ?? widget.track;
     final lines = seo?.lyricLines ?? const <LyricLine>[];
-    final lineIndex = isCurrent ? lyricIndexAt(lines, player.position) : -1;
+    final lineIndex =
+        isCurrent ? lyricIndexAt(lines, player.recommendPosition) : -1;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
       child: Column(
@@ -621,32 +794,51 @@ class _RecommendFreshPageState extends State<_RecommendFreshPage> {
             child: PageView(
               controller: _hController,
               children: [
-                _lyricsPane(context, lines, lineIndex),
+                _lyricsPane(context, lines, lineIndex, isCurrent),
                 _mainPane(context, seo, fullTrack, lines, lineIndex, isCurrent),
               ],
             ),
           ),
-          const SizedBox(height: 10),
-          // 底部整行 = 进度条：原「发现 / 播放 / 我的」三键行已去掉
-          // （回首页/我的走壳层导航），与播放页共用同一 SeekBar 行为。
-          if (isCurrent)
-            SeekBar(
-              position: player.position,
-              duration: player.duration,
-              onSeek: player.seek,
-              showTimes: true,
-            )
-          else
-            // 非当前页占位（与播放页同口径），避免切页时底部高度跳动
-            const SizedBox(height: 76),
-          if (player.error != null && isCurrent)
+          if (player.recommendError != null && isCurrent)
             Padding(
               padding: const EdgeInsets.only(top: 6),
-              child: Text(player.error!,
+              child: Text(player.recommendError!,
                   style: TextStyle(color: scheme.error, fontSize: 12)),
             ),
         ],
       ),
+    );
+  }
+
+  /// 控制行（进度条 + 播放/暂停键）：定在封面正下方——主页面在封面
+  /// 之下、歌词页同理置其底部（右滑进歌词页时控制不丢）。
+  /// 仅当前曲页是活控件，且全程绑定推荐会话：SeekBar 用会话的
+  /// 位置/时长，播放键走 toggleRecommend（未占用输出时抢回输出
+  /// 续播）；非当前页用等高占位，避免翻页时版面上下跳动。
+  Widget _controlRow(BuildContext context, {required bool live}) {
+    if (!live) return const SizedBox(height: 76);
+    final player = context.watch<PlayerService>();
+    return Row(
+      children: [
+        Expanded(
+          child: SeekBar(
+            position: player.recommendPosition,
+            duration: player.recommendDuration,
+            onSeek: player.recommendSeek,
+            showTimes: true,
+          ),
+        ),
+        const SizedBox(width: 4),
+        IconButton.filled(
+          iconSize: 26,
+          icon: Icon(player.recommendLoading
+              ? Icons.hourglass_top
+              : player.recommendPlaying
+                  ? Icons.pause
+                  : Icons.play_arrow),
+          onPressed: player.toggleRecommend,
+        ),
+      ],
     );
   }
 
@@ -665,10 +857,6 @@ class _RecommendFreshPageState extends State<_RecommendFreshPage> {
         ? ''
         : lines[(lineIndex < 0 ? 0 : lineIndex).clamp(0, lines.length - 1)]
             .text;
-    final nextTrack = isCurrent &&
-            player.currentIndex + 1 < player.queueItems.length
-        ? player.queueItems[player.currentIndex + 1]
-        : null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -699,7 +887,10 @@ class _RecommendFreshPageState extends State<_RecommendFreshPage> {
               ),
           ],
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 10),
+        // 封面正下方控制行：进度条（可拖）+ 播放/暂停键
+        _controlRow(context, live: isCurrent),
+        const SizedBox(height: 8),
         SizedBox(
           height: 20,
           child: currentLyric.isEmpty
@@ -753,43 +944,18 @@ class _RecommendFreshPageState extends State<_RecommendFreshPage> {
             ),
           ],
         ),
-        const Spacer(),
-        if (nextTrack != null)
-          Material(
-            color: scheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(12),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(12),
-              onTap: () => player.next(),
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                child: Row(
-                  children: [
-                    CoverImage(cover: nextTrack.cover, width: 36, height: 36),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        '下一首：${nextTrack.name} — ${nextTrack.artistNames}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                    ),
-                    const Icon(Icons.keyboard_arrow_up, size: 20),
-                  ],
-                ),
-              ),
-            ),
-          ),
+        // 「下一首」露出条已整体删除（用户点名）：上下滑切歌不变，
+        // 只是不再预告下一首；其占位 Spacer 一并去掉，计数排即末行。
       ],
     );
   }
 
   /// 歌词页（横向分页左侧页）：与播放页共用同一份 [LyricList]
   /// （当前行高亮 + 同步自动滚动）；禁手动滚动，纵向手势留给外层切歌。
-  Widget _lyricsPane(
-      BuildContext context, List<LyricLine> lines, int lineIndex) {
+  /// 底部同置控制行：右滑进歌词页后进度/播放暂停够得着（与主页面的
+  /// 封面下控制行同一组件、同一行为）。
+  Widget _lyricsPane(BuildContext context, List<LyricLine> lines,
+      int lineIndex, bool isCurrent) {
     final scheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -817,6 +983,8 @@ class _RecommendFreshPageState extends State<_RecommendFreshPage> {
             userScrollable: false,
           ),
         ),
+        const SizedBox(height: 8),
+        _controlRow(context, live: isCurrent),
       ],
     );
   }
@@ -839,18 +1007,19 @@ class _RecommendFreshPageState extends State<_RecommendFreshPage> {
       ),
     );
   }
-  /// 右上角音质芯片：只显示当前曲实际在播的档，准备无损时显示准备态，
-  /// 绝不按设置值虚报
+  /// 右上角音质芯片：只显示推荐会话当前曲实际在播的档（会话视图
+  /// 口径：未占用输出时 recommendQuality 为 null、芯片不显示），
+  /// 准备无损时显示准备态，绝不按设置值虚报
   Widget _qualityChip(BuildContext context, PlayerService player) {
     final scheme = Theme.of(context).colorScheme;
     final String text;
-    if (player.preparingLossless) {
+    if (player.recommendPreparingLossless) {
       text = '无损准备中';
-    } else if (player.currentQuality == 'lossless') {
+    } else if (player.recommendQuality == 'lossless') {
       text = '无损 FLAC';
-    } else if (player.currentQuality != null &&
-        SettingsService.qualityOptions.contains(player.currentQuality)) {
-      text = SettingsService.qualityLabel(player.currentQuality!)
+    } else if (player.recommendQuality != null &&
+        SettingsService.qualityOptions.contains(player.recommendQuality)) {
+      text = SettingsService.qualityLabel(player.recommendQuality!)
           .split('(')
           .first
           .trim();
@@ -866,7 +1035,7 @@ class _RecommendFreshPageState extends State<_RecommendFreshPage> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (player.preparingLossless)
+          if (player.recommendPreparingLossless)
             const Padding(
               padding: EdgeInsets.only(right: 6),
               child: SizedBox(
@@ -881,6 +1050,75 @@ class _RecommendFreshPageState extends State<_RecommendFreshPage> {
                   fontWeight: FontWeight.w600,
                   color: scheme.onPrimaryContainer)),
         ],
+      ),
+    );
+  }
+}
+
+/// 场景选择网格里的一格：图标（场景图或默认项图标）+ 名称，
+/// 选中态描边 + 右上角勾。
+class _SceneTile extends StatelessWidget {
+  final String label;
+  final CoverArt? cover;
+  final IconData? icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _SceneTile({
+    required this.label,
+    this.cover,
+    this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: selected ? scheme.primary : scheme.outlineVariant,
+            width: selected ? 2 : 1,
+          ),
+        ),
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                if (cover != null)
+                  CoverImage(cover: cover!, width: 52, height: 52, radius: 10)
+                else
+                  Icon(icon ?? Icons.music_note,
+                      size: 40, color: scheme.primary),
+                if (selected)
+                  Positioned(
+                    right: -6,
+                    top: -6,
+                    child: Icon(Icons.check_circle,
+                        size: 18, color: scheme.primary),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    fontWeight:
+                        selected ? FontWeight.w700 : FontWeight.normal,
+                  ),
+            ),
+          ],
+        ),
       ),
     );
   }

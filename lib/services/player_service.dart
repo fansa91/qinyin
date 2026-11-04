@@ -9,14 +9,45 @@ import 'play_queue.dart';
 import 'play_resolver.dart';
 import 'settings_service.dart';
 
-/// 播放器：全 App 唯一的播放引擎与当前队列持有者（main.dart 构造
-/// 一份、Provider 全局注入；内部只有一个 AudioPlayer 实例）。
-/// 所有来源（首页/搜索/详情/电台/我的/下载/推荐）的点播都汇入
-/// [playQueue]/[jumpTo]，MiniPlayer 与各播放面订阅的都是这一份
-/// 状态——不存在第二个播放器或第二条队列。队列推进也只有一处
-/// 实现：按钮、上下滑手势、播完自动推进全部走
-/// [next]/[prev]/[_onCompleted] → [PlayQueue] → [_playAt]。
-/// 来源交接与推荐会话挂起/恢复见 [playQueue] 与 [resumeRecommendQueue]。
+/// 播放会话：主会话（首页/搜索/详情/电台/我的/下载等一切普通来源）
+/// 与推荐会话（推荐页专用）。物理上只有一个音频输出，同一时刻只有
+/// 一个会话占用引擎；会话之间互不传递、互不接管（用户定版的隔离
+/// 逻辑，取代早先的「推荐会话挂起/恢复」交接）。
+enum PlayerSession { main, recommend }
+
+/// 非活动会话的状态存档：曲目/下标/续拉回调/曲内位置。活动会话的
+/// 状态直接活在引擎里（queue/position 等），切换输出时互换。
+class _SessionStore {
+  List<Track> items = [];
+  int index = 0;
+  Future<List<Track>> Function()? loadMore;
+  Duration position = Duration.zero;
+  bool hasContent = false;
+
+  void clear() {
+    items = [];
+    index = 0;
+    loadMore = null;
+    position = Duration.zero;
+    hasContent = false;
+  }
+}
+
+/// 播放器：全 App 唯一的播放引擎（main.dart 构造一份、Provider
+/// 全局注入；内部只有一个 AudioPlayer 实例）。
+///
+/// 会话隔离（用户定版）：播放入口按来源分两条——
+/// - 主会话：[playQueue]/[jumpTo] 等既有入口，MiniPlayer 与播放页
+///   绑定它；
+/// - 推荐会话：[startRecommendSession] 等 recommend* 入口，只活在
+///   推荐页里，它的曲目**永不出现在 MiniPlayer 上**，也不与主队列
+///   互相交接。
+/// 两侧谁开始播，另一侧暂停并把状态存进自己的 store，之后从存档
+/// 处恢复（曲目/下标/位置原样）。队列推进实现只有一处：活动会话
+/// 的按钮、上下滑手势、播完自动推进都走
+/// [next]/[prev]/[_onCompleted] → [PlayQueue] → [_playAt]；
+/// 非活动会话的 recommend* 控制只改它自己 store 的下标/位置，
+/// 不触碰音频。
 class PlayerService extends ChangeNotifier {
   final PlayResolver resolver;
   final SettingsService settings;
@@ -36,33 +67,62 @@ class PlayerService extends ChangeNotifier {
   bool _loading = false;
   bool _preparingLossless = false;
 
-  /// 当前队列来源标记（推荐页建队时传 'recommend'，其余来源为 null）。
-  /// 推荐页据此判断「队列已经是推荐流」还是「别的内容在播，不要打断」。
+  /// 引擎当前队列的来源标记：推荐会话占用输出时为 'recommend'，
+  /// 主会话时为 null（随会话切换同步，仅作展示/调试口径；
+  /// 会话判断以 [activeSession] 为准）。
   String? queueTag;
   static const String recommendQueueTag = 'recommend';
 
-  /// 被外部来源接管时挂起的推荐会话快照（队列 + 下标 + 续拉回调）。
-  ///
-  /// 推荐不是独立播放器：全 App 只有一个引擎、一条当前队列（见本类
-  /// 顶部注释），推荐流同样活在这条队列里。用户中途去播首页/搜索等
-  /// 其他来源，是正常交接——当前队列被新点播替换；但推荐会话不该
-  /// 就此蒸发：替换前把队列与下标快照下来，推荐页就能从暂停处原样
-  /// 恢复（[resumeRecommendQueue]），而不是每次都从第一首重建。
-  /// 快照只存一份；新的推荐会话建立时清除，恢复后亦清除。
-  List<Track>? _suspendedQueueItems;
-  int _suspendedQueueIndex = 0;
-  Future<List<Track>> Function()? _suspendedLoadMore;
+  /// 当前占用引擎（音频输出）的会话；另一会话的状态在它的 store 里
+  PlayerSession _activeSession = PlayerSession.main;
+  final _mainStore = _SessionStore();
+  final _recommendStore = _SessionStore();
 
-  /// 是否有一份被挂起的推荐会话可恢复
-  bool get hasSuspendedRecommend =>
-      _suspendedQueueItems != null && _suspendedQueueItems!.isNotEmpty;
+  PlayerSession get activeSession => _activeSession;
+  bool get recommendIsActive => _activeSession == PlayerSession.recommend;
 
-  /// 挂起的推荐会话停在的那首（供推荐页提示页展示「暂停在《X》」）
-  Track? get suspendedRecommendTrack {
-    final items = _suspendedQueueItems;
-    if (items == null || items.isEmpty) return null;
-    return items[_suspendedQueueIndex.clamp(0, items.length - 1)];
+  _SessionStore _storeOf(PlayerSession s) =>
+      s == PlayerSession.main ? _mainStore : _recommendStore;
+
+  /// 把引擎当前状态存入 [session] 的 store（切换输出前调用，同步落位）
+  void _stashEngineInto(PlayerSession session) {
+    final store = _storeOf(session);
+    store.items = List.of(queue.items);
+    store.index = queue.index;
+    store.loadMore = onLoadMore;
+    store.position = _position;
+    store.hasContent = !queue.isEmpty;
   }
+
+  /// 暂停引擎音频（不等待平台 future：状态切换先行落位，平台通道
+  /// 本身按调用顺序执行，pause 必在后续 play 之前生效）
+  void _pauseEngine() {
+    unawaited(_player.pause().catchError((_) {}));
+  }
+
+  /// 把 [session] store 里的会话装入引擎并从存档下标起播（抢输出）。
+  /// 调用方须保证 store 有内容、且当前活动会话已 stash + 暂停。
+  Future<void> _activateFromStore(PlayerSession session) async {
+    final store = _storeOf(session);
+    _activeSession = session;
+    queueTag = session == PlayerSession.recommend ? recommendQueueTag : null;
+    onLoadMore = store.loadMore;
+    queue.setQueue(List.of(store.items), store.index);
+    final resumePos = store.position;
+    store.clear();
+    _currentSeo = null;
+    _currentQuality = null;
+    _error = null;
+    notifyListeners();
+    await _playAt(queue.index);
+    // 会话内位置比历史续播进度更新，以它为准恢复
+    if (resumePos > Duration.zero) {
+      try {
+        await _player.seek(resumePos);
+      } catch (_) {}
+    }
+  }
+
   Duration _position = Duration.zero;
   Duration _duration = Duration.zero;
   String? _error;
@@ -112,13 +172,62 @@ class PlayerService extends ChangeNotifier {
   int get currentIndex => queue.index;
   List<Track> get queueItems => List.unmodifiable(queue.items);
 
-  /// 从某个来源建队列并起播（点播即建队列，照官方 QueueLoader 模型）
-  ///
-  /// 来源交接语义（全 App 统一）：无论点播来自首页/搜索/详情/电台/
-  /// 我的/下载/推荐，进的都是这一条队列。当前队列是推荐流而新点播
-  /// 不是时，先把推荐会话快照挂起（见 [_suspendedQueueItems]），
-  /// 再干净换队——不残留第二份队列状态；新点播本身是推荐流时，
-  /// 视为新会话建立，旧快照作废。
+  // ── 会话视图（隔离口径）────────────────────────────────────────
+
+  /// MiniPlayer 是否有内容可显示：只有**主会话**占用输出且有曲目
+  /// 时才为 true。推荐会话占用输出时一律 false——它的曲目永不
+  /// 出现在 mini 条上（各页一致）；主会话的曲目/下标在它的 store
+  /// 里原样保留，但 mini 条在推荐占用期间按「无主队列内容」隐藏，
+  /// 不拿推荐的进度冒充主会话状态（不误导）。
+  bool get miniBarHasContent =>
+      _activeSession == PlayerSession.main && currentTrack != null;
+
+  /// 主会话视图（占用输出时即引擎本身，否则读主会话 store）
+  bool get mainHasContent =>
+      recommendIsActive ? _mainStore.hasContent : !queue.isEmpty;
+  List<Track> get mainQueueItems =>
+      recommendIsActive ? List.unmodifiable(_mainStore.items) : queueItems;
+  int get mainCurrentIndex =>
+      recommendIsActive ? _mainStore.index : currentIndex;
+  Track? get mainCurrentTrack {
+    final items = mainQueueItems;
+    if (items.isEmpty) return null;
+    return items[mainCurrentIndex.clamp(0, items.length - 1)];
+  }
+
+  /// 推荐会话视图（占用输出时即引擎本身，否则读推荐会话 store）
+  bool get recommendHasContent =>
+      recommendIsActive ? !queue.isEmpty : _recommendStore.hasContent;
+  List<Track> get recommendQueueItems => recommendIsActive
+      ? queueItems
+      : List.unmodifiable(_recommendStore.items);
+  int get recommendCurrentIndex =>
+      recommendIsActive ? currentIndex : _recommendStore.index;
+  Track? get recommendCurrentTrack {
+    final items = recommendQueueItems;
+    if (items.isEmpty) return null;
+    return items[recommendCurrentIndex.clamp(0, items.length - 1)];
+  }
+  Duration get recommendPosition =>
+      recommendIsActive ? position : _recommendStore.position;
+  Duration get recommendDuration => recommendIsActive
+      ? duration
+      : Duration(milliseconds: recommendCurrentTrack?.durationMs ?? 0);
+  bool get recommendPlaying => recommendIsActive && playing;
+  bool get recommendLoading => recommendIsActive && loading;
+  bool get recommendPreparingLossless =>
+      recommendIsActive && preparingLossless;
+  String? get recommendError => recommendIsActive ? error : null;
+  String? get recommendQuality => recommendIsActive ? currentQuality : null;
+
+  // ── 主会话入口 ────────────────────────────────────────────────
+
+  /// 主会话建队列并起播（点播即建队列，照官方 QueueLoader 模型）。
+  /// 首页/搜索/详情/电台/我的/下载的一切点播都走这里，只影响主
+  /// 会话：推荐会话正占用输出时，先把它的状态原样存入推荐 store
+  /// 并暂停，主会话接管输出；推荐会话内容分毫不动。
+  /// [tag] 仅为兼容旧签名：传 recommendQueueTag 时转走推荐会话
+  /// 入口（[startRecommendSession]），新代码不应再传。
   Future<void> playQueue(
     List<Track> tracks,
     int startIndex, {
@@ -127,38 +236,143 @@ class PlayerService extends ChangeNotifier {
   }) async {
     if (tracks.isEmpty) return;
     if (tag == recommendQueueTag) {
-      _clearSuspendedRecommend();
-    } else if (queueTag == recommendQueueTag && !queue.isEmpty) {
-      _suspendedQueueItems = List.of(queue.items);
-      _suspendedQueueIndex = queue.index;
-      _suspendedLoadMore = onLoadMore;
+      await startRecommendSession(tracks, startIndex, loadMore: loadMore);
+      return;
     }
+    if (recommendIsActive) {
+      _stashEngineInto(PlayerSession.recommend);
+      _activeSession = PlayerSession.main;
+      _pauseEngine();
+    }
+    _mainStore.clear();
     onLoadMore = loadMore;
-    queueTag = tag;
+    queueTag = null;
     queue.setQueue(tracks, startIndex);
+    notifyListeners();
     await _playAt(queue.index);
   }
 
-  void _clearSuspendedRecommend() {
-    _suspendedQueueItems = null;
-    _suspendedQueueIndex = 0;
-    _suspendedLoadMore = null;
-  }
+  // ── 推荐会话入口（只活在推荐页，与主会话互不传递）────────────
 
-  /// 恢复被挂起的推荐会话：队列、下标、续拉回调原样还原并从挂起处
-  /// 起播（曲内进度由 [_playAt] 的既有续播逻辑按已保存进度恢复）。
-  /// 返回是否确有快照可恢复；无快照时不触碰当前队列。
-  Future<bool> resumeRecommendQueue() async {
-    final items = _suspendedQueueItems;
-    if (items == null || items.isEmpty) return false;
-    final index = _suspendedQueueIndex;
-    final loadMore = _suspendedLoadMore;
-    _clearSuspendedRecommend();
+  /// 以新曲目建立推荐会话并抢占输出起播：主会话状态原样存入主
+  /// store 并暂停，之后主会话点播或推荐页再建会话才轮到它恢复。
+  Future<void> startRecommendSession(
+    List<Track> tracks,
+    int startIndex, {
+    Future<List<Track>> Function()? loadMore,
+  }) async {
+    if (tracks.isEmpty) return;
+    if (!recommendIsActive) {
+      _stashEngineInto(PlayerSession.main);
+      _activeSession = PlayerSession.recommend;
+      _pauseEngine();
+    }
+    _recommendStore.clear();
     onLoadMore = loadMore;
     queueTag = recommendQueueTag;
-    queue.setQueue(items, index);
+    queue.setQueue(tracks, startIndex);
+    notifyListeners();
     await _playAt(queue.index);
-    return true;
+  }
+
+  /// 预置/替换推荐会话内容但不抢输出（主会话在播、用户在推荐页
+  /// 改选场景时用）：推荐页据此展示新场景的流（暂停态），用户点
+  /// 播放才由 [claimRecommendOutput] 接管输出。推荐会话正占用
+  /// 输出时调用无意义（那种情况走 [startRecommendSession]），
+  /// 直接忽略。
+  void setRecommendSession(
+    List<Track> tracks, {
+    Future<List<Track>> Function()? loadMore,
+  }) {
+    if (recommendIsActive) return;
+    _recommendStore.items = List.of(tracks);
+    _recommendStore.index = 0;
+    _recommendStore.loadMore = loadMore;
+    _recommendStore.position = Duration.zero;
+    _recommendStore.hasContent = tracks.isNotEmpty;
+    notifyListeners();
+  }
+
+  /// 推荐会话抢回输出：主会话状态存入主 store 暂停，推荐会话从
+  /// 存档下标/位置续播。已占用输出或会话为空时为空操作。
+  Future<void> claimRecommendOutput() async {
+    if (recommendIsActive || !_recommendStore.hasContent) return;
+    _stashEngineInto(PlayerSession.main);
+    _pauseEngine();
+    await _activateFromStore(PlayerSession.recommend);
+  }
+
+  /// 推荐页播放/暂停键：占用输出时就是暂停/继续；未占用时抢回
+  /// 输出从存档处续播。
+  Future<void> toggleRecommend() async {
+    if (recommendIsActive) {
+      await toggle();
+      return;
+    }
+    await claimRecommendOutput();
+  }
+
+  /// 推荐页下一首：占用输出走引擎推进；未占用只挪推荐 store 的
+  /// 下标（到尾则经会话自己的续拉回调补页），不触碰音频与主会话。
+  Future<void> recommendNext() async {
+    if (recommendIsActive) {
+      await next();
+      return;
+    }
+    final s = _recommendStore;
+    if (s.items.isEmpty) return;
+    if (s.index < s.items.length - 1) {
+      s.index++;
+      s.position = Duration.zero;
+      notifyListeners();
+      return;
+    }
+    final loader = s.loadMore;
+    if (loader == null) return;
+    final more = await loader();
+    if (more.isEmpty) return;
+    s.items.addAll(more);
+    s.index++;
+    s.position = Duration.zero;
+    notifyListeners();
+  }
+
+  /// 推荐页上一首（口径同 [recommendNext]）
+  Future<void> recommendPrev() async {
+    if (recommendIsActive) {
+      await prev();
+      return;
+    }
+    final s = _recommendStore;
+    if (s.items.isEmpty || s.index <= 0) return;
+    s.index--;
+    s.position = Duration.zero;
+    notifyListeners();
+  }
+
+  /// 推荐页跳到某首（纵向滑动落点/列表点选）：占用输出走引擎
+  /// [jumpTo]；未占用只改推荐 store 下标。
+  Future<void> recommendJumpTo(int index) async {
+    if (recommendIsActive) {
+      await jumpTo(index);
+      return;
+    }
+    final s = _recommendStore;
+    if (index < 0 || index >= s.items.length || index == s.index) return;
+    s.index = index;
+    s.position = Duration.zero;
+    notifyListeners();
+  }
+
+  /// 推荐页拖动进度：占用输出走引擎 seek；未占用只记到推荐
+  /// store，抢回输出时从该位置续播。
+  Future<void> recommendSeek(Duration pos) async {
+    if (recommendIsActive) {
+      await seek(pos);
+      return;
+    }
+    _recommendStore.position = pos;
+    notifyListeners();
   }
 
   Future<void> playTrack(Track track) => playQueue([track], 0);

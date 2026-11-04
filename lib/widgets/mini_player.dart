@@ -8,22 +8,37 @@ import 'seek_bar.dart';
 
 /// 迷你播放条（移动端）与桌面通栏播放条共用组件。
 /// 桌面通栏时 [fullBar] 为 true，额外显示进度与队列/循环/音量控制。
+/// [floating] 为移动壳层的悬浮形态：圆角卡片 + 阴影，由壳层用
+/// Positioned 浮在页面内容之上（两侧小边距、接近满宽），不占布局
+/// 高度；内部排布与高度与普通形态完全一致（不压扁）。桌面通栏不用。
 class MiniPlayer extends StatelessWidget {
   final VoidCallback? onTapCover;
   final bool fullBar;
-  const MiniPlayer({super.key, this.onTapCover, this.fullBar = false});
+  final bool floating;
+  const MiniPlayer({
+    super.key,
+    this.onTapCover,
+    this.fullBar = false,
+    this.floating = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     final player = context.watch<PlayerService>();
-    final track = player.currentTrack;
-    if (track == null) return const SizedBox.shrink();
+    // 只绑定主会话：推荐会话占用输出时按「无主队列内容」隐藏——
+    // 推荐曲目永不出现在 mini 条上（会话隔离，用户定版）
+    if (!player.miniBarHasContent) return const SizedBox.shrink();
+    final track = player.currentTrack!;
     final scheme = Theme.of(context).colorScheme;
     final progress = player.duration.inMilliseconds > 0
         ? player.position.inMilliseconds / player.duration.inMilliseconds
         : 0.0;
     return Material(
       color: scheme.surfaceContainer,
+      elevation: floating ? 6 : 0,
+      shadowColor: scheme.shadow,
+      borderRadius: floating ? BorderRadius.circular(16) : BorderRadius.zero,
+      clipBehavior: floating ? Clip.antiAlias : Clip.none,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [

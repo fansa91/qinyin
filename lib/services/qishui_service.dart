@@ -242,6 +242,7 @@ class QishuiService {
 class PlatformFeedService {
   static const String host = 'https://open.douyin.com';
   static const String feedPath = '/api/luna/v1/platform/feed/song-tab/';
+  static const String feedModePath = '/api/luna/v1/platform/feed/mode/';
   static const String searchPath = '/api/luna/v1/platform/search/';
   static const String tokenUrl =
       'https://open.qishui.com/api/luna/v1/platform/client/token/get/';
@@ -312,7 +313,14 @@ class PlatformFeedService {
 
   /// 推荐流分页 → (曲目, hasMore)；cursor 为偏移量（首页 0，之后 += 本页条数），
   /// 响应无 next_cursor 字段。err_no 非 0 时抛 StateError 供上层回退。
-  Future<(List<Track>, bool)> songTabPage(int cursor, {int count = 20}) async {
+  /// [sceneModeId] 非空时按场景取流（query 参数 scene=scene_mode_id，
+  /// GSQZ 口径；2026-11-04 实测粤语 10 / DJ 7 / 助眠 8 三场景与默认流
+  /// 首页 20 首零重叠，确为不同曲目池）。
+  Future<(List<Track>, bool)> songTabPage(
+    int cursor, {
+    int count = 20,
+    String? sceneModeId,
+  }) async {
     final resp = await _dio.get<dynamic>(
       feedPath,
       queryParameters: {
@@ -324,6 +332,8 @@ class PlatformFeedService {
         'cursor': '$cursor',
         'cnt': '$count',
         'count': '$count',
+        if (sceneModeId != null && sceneModeId.isNotEmpty)
+          'scene': sceneModeId,
       },
       options: Options(headers: {'User-Agent': sdkUa}),
     );
@@ -334,6 +344,83 @@ class PlatformFeedService {
     }
     final data = (body['data'] as Map<String, dynamic>?) ?? const {};
     return (QishuiService.parsePlatformItems(body), data['has_more'] == true);
+  }
+
+  List<FeedMode>? _feedModesCache;
+
+  /// 场景模式清单（feed/mode）：会话内缓存，重复调用不再发请求。
+  /// 形状（实测）：data.feed_mode_block[0]（title「场景音乐」）.feed_mode[]
+  /// 共 45 项。err_no 28001008 时刷新令牌重试一次（与 searchPage 同口径）；
+  /// 其余 err_no 抛 StateError，由推荐页把场景入口优雅隐藏。
+  Future<List<FeedMode>> fetchFeedModes() async {
+    final cached = _feedModesCache;
+    if (cached != null) return cached;
+    for (var attempt = 0; ; attempt++) {
+      final token = await clientToken();
+      final headers = <String, dynamic>{'User-Agent': sdkUa};
+      if (token != null) headers['access-token'] = token;
+      final resp = await _dio.post<dynamic>(
+        feedModePath,
+        queryParameters: _params(),
+        data: {'common_params': <String, dynamic>{}},
+        options: Options(headers: headers),
+      );
+      final body = (resp.data as Map).cast<String, dynamic>();
+      final errNo = body['err_no'];
+      if (errNo == 28001008 && attempt == 0) {
+        _clientToken = null; // 令牌过期：丢弃，下轮重取后重试一次
+        continue;
+      }
+      if (errNo != null && errNo != 0) {
+        throw StateError(
+            'platform feed/mode err_no=$errNo ${body['err_msg'] ?? ''}');
+      }
+      return _feedModesCache = parseFeedModes(body);
+    }
+  }
+
+  /// feed/mode 响应 → 场景清单（纯函数，可测）：遍历全部
+  /// feed_mode_block 收集带 scene_mode_id 的条目，按 id 去重、保持
+  /// 服务端顺序（首块即「场景音乐」45 项）。
+  static List<FeedMode> parseFeedModes(Map<String, dynamic> body) {
+    final data = (body['data'] as Map<String, dynamic>?) ?? const {};
+    final blocks = (data['feed_mode_block'] as List?) ?? const [];
+    final out = <FeedMode>[];
+    final seen = <String>{};
+    for (final block in blocks) {
+      if (block is! Map<String, dynamic>) continue;
+      for (final item in (block['feed_mode'] as List?) ?? const []) {
+        if (item is! Map<String, dynamic>) continue;
+        final entity = item['entity'] as Map<String, dynamic>?;
+        if (entity == null) continue;
+        final mode = FeedMode.fromEntity(entity);
+        if (mode != null && seen.add(mode.sceneModeId)) out.add(mode);
+      }
+    }
+    return out;
+  }
+
+  static const String _kSceneId = 'recommend_scene_mode_id';
+  static const String _kSceneName = 'recommend_scene_name';
+
+  /// 读上次选定的推荐场景（id + 显示名）；未选过返回 null。
+  static Future<({String id, String name})?> loadSavedScene() async {
+    final prefs = await SharedPreferences.getInstance();
+    final id = prefs.getString(_kSceneId);
+    if (id == null || id.isEmpty) return null;
+    return (id: id, name: prefs.getString(_kSceneName) ?? '');
+  }
+
+  /// 持久化推荐场景选择；传 null 清除（回到默认推荐）。
+  static Future<void> saveScene(FeedMode? mode) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mode == null) {
+      await prefs.remove(_kSceneId);
+      await prefs.remove(_kSceneName);
+    } else {
+      await prefs.setString(_kSceneId, mode.sceneModeId);
+      await prefs.setString(_kSceneName, mode.name);
+    }
   }
 
   Map<String, String> _params() => commonParams(

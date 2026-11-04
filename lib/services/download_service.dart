@@ -180,6 +180,11 @@ class DownloadService extends ChangeNotifier {
         _kRecords, jsonEncode(_records.map((r) => r.toJson()).toList()));
   }
 
+  /// 当前下载目录（自定义优先，否则应用文档目录/qinyin_downloads）。
+  /// 供缓存盘点/清扫定位写标签临时件（*.qytag）用——只删该后缀，
+  /// 目录里的歌曲本体一律不碰。
+  Future<Directory> downloadDirectory() => _downloadDir();
+
   Future<Directory> _downloadDir() async {
     final custom = settings.downloadDirectory;
     if (custom.isNotEmpty) {

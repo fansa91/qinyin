@@ -4,6 +4,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 
 import '../core/responsive.dart';
+import '../services/cache_service.dart';
 import '../services/settings_service.dart';
 
 /// 设置：默认音质 / 下载（路径+文件名模板）/ 主题 / 关于
@@ -65,6 +66,8 @@ class SettingsScreen extends StatelessWidget {
           trailing: const Icon(Icons.edit_outlined),
           onTap: () => _editFormat(context, settings),
         ),
+        const Divider(),
+        const _CacheSection(),
         const Divider(),
         const ListTile(
           title: Text('外观'),
@@ -157,6 +160,122 @@ class SettingsScreen extends StatelessWidget {
       ),
     );
     if (result != null) await settings.setFilenameFormat(result);
+  }
+}
+
+/// 设置页「缓存」区：占用盘点（无损解密缓存 / 封面图片缓存 /
+/// 临时文件残留三项，口径见 [CacheBreakdown]）+ 一键清理。
+/// 清理只动缓存类数据：下载的歌曲、收藏、历史、设置一律不碰；
+/// 清完无损再播会重新解密、封面重新拉取，行为不受影响。
+class _CacheSection extends StatefulWidget {
+  const _CacheSection();
+
+  @override
+  State<_CacheSection> createState() => _CacheSectionState();
+}
+
+class _CacheSectionState extends State<_CacheSection> {
+  CacheBreakdown? _usage;
+  bool _clearing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  Future<void> _refresh() async {
+    final cache = context.read<CacheService>();
+    final usage = await cache.measure();
+    if (mounted) setState(() => _usage = usage);
+  }
+
+  Future<void> _clear() async {
+    if (_clearing) return;
+    setState(() => _clearing = true);
+    final cache = context.read<CacheService>();
+    await cache.clearAll();
+    // 内存图片缓存顺带释放（不落盘，不计入上面的占用数字）
+    PaintingBinding.instance.imageCache
+      ..clear()
+      ..clearLiveImages();
+    final usage = await cache.measure();
+    if (!mounted) return;
+    setState(() {
+      _usage = usage;
+      _clearing = false;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('缓存已清理（下载的歌曲与收藏不受影响）')),
+    );
+  }
+
+  static String _fmt(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    if (bytes < 1024 * 1024 * 1024) {
+      return '${(bytes / 1024 / 1024).toStringAsFixed(1)} MB';
+    }
+    return '${(bytes / 1024 / 1024 / 1024).toStringAsFixed(2)} GB';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final usage = _usage;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const ListTile(
+          title: Text('缓存'),
+          leading: Icon(Icons.storage_outlined),
+        ),
+        if (usage == null)
+          const ListTile(
+            title: Text('缓存占用'),
+            subtitle: Text('统计中…'),
+          )
+        else ...[
+          ListTile(
+            dense: true,
+            title: const Text('无损解密缓存'),
+            subtitle: const Text('上限 512 MB，超出自动清旧'),
+            trailing: Text(_fmt(usage.losslessBytes)),
+          ),
+          ListTile(
+            dense: true,
+            title: const Text('封面图片缓存'),
+            subtitle: const Text('上限 200 个 / 30 天，系统自动滚动'),
+            trailing: Text(_fmt(usage.coverBytes)),
+          ),
+          ListTile(
+            dense: true,
+            title: const Text('临时文件残留'),
+            subtitle: const Text('写标签/解密中断的孤儿临时件'),
+            trailing: Text(_fmt(usage.tagTempBytes)),
+          ),
+          ListTile(
+            dense: true,
+            title: const Text('合计'),
+            trailing: Text(
+              _fmt(usage.totalBytes),
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+        ListTile(
+          title: const Text('清理缓存'),
+          subtitle: const Text('只清缓存，不动下载的歌曲、收藏与设置'),
+          trailing: _clearing
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.delete_sweep_outlined),
+          onTap: _clearing ? null : _clear,
+        ),
+      ],
+    );
   }
 }
 
