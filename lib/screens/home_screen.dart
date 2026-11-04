@@ -100,7 +100,12 @@ class _HomeScreenState extends State<HomeScreen> {
         final feed = snap.data!;
         return RefreshIndicator(
           onRefresh: () async => setState(() => _future = _load()),
-          child: CustomScrollView(
+          // 宽屏自适应：整页内容（含 SliverAppBar）限宽居中，网格与
+          // 曲目列表同处一个内容列、左右对齐一致；compact 下约束
+          // 不起作用，与原布局一致。
+          child: ConstrainedCenter(
+            maxWidth: Breakpoints.listMaxWidth,
+            child: CustomScrollView(
             slivers: [
               SliverAppBar(
                 floating: true,
@@ -176,8 +181,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 SliverPadding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   sliver: SliverGrid(
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: isWide(context) ? 4 : 2,
+                    // 列数随可用宽度自动增：卡片最大宽封顶，宽屏
+                    // 增列而不是把卡片拉宽（限宽 1200 内约 5 列）
+                    gridDelegate:
+                        const SliverGridDelegateWithMaxCrossAxisExtent(
+                      maxCrossAxisExtent: Breakpoints.cardMaxExtent,
                       mainAxisSpacing: 14,
                       crossAxisSpacing: 14,
                       childAspectRatio: 0.82,
@@ -212,6 +220,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
               const SliverToBoxAdapter(child: SizedBox(height: 16)),
             ],
+            ),
           ),
         );
       },
@@ -307,13 +316,17 @@ class _MorePlaylistsScreenState extends State<MorePlaylistsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('推荐歌单')),
-      body: CustomScrollView(
+      // 宽屏自适应：与首页同一口径——内容限宽居中、网格按卡片
+      // 最大宽自动增列（AppBar 为窗口 chrome，保持满宽）
+      body: ConstrainedCenter(
+        maxWidth: Breakpoints.listMaxWidth,
+        child: CustomScrollView(
         slivers: [
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
             sliver: SliverGrid(
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: isWide(context) ? 4 : 2,
+              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: Breakpoints.cardMaxExtent,
                 mainAxisSpacing: 14,
                 crossAxisSpacing: 14,
                 childAspectRatio: 0.82,
@@ -341,6 +354,7 @@ class _MorePlaylistsScreenState extends State<MorePlaylistsScreen> {
             ),
           ),
         ],
+        ),
       ),
     );
   }

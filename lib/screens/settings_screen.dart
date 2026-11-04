@@ -112,6 +112,8 @@ class SettingsScreen extends StatelessWidget {
   }) {
     showModalBottomSheet<void>(
       context: context,
+      constraints:
+          const BoxConstraints(maxWidth: Breakpoints.menuSheetMaxWidth),
       builder: (ctx) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,

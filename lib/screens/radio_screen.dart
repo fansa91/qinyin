@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../core/responsive.dart';
 import '../models/models.dart';
 import '../services/player_service.dart';
 import '../services/qishui_service.dart';
@@ -26,7 +27,10 @@ class RadioScreen extends StatelessWidget {
             return const Center(child: Text('加载失败，请检查网络'));
           }
           final tracks = snap.data ?? const [];
-          return CustomScrollView(
+          // 宽屏自适应：内容限宽居中，曲目列表不拉满整窗
+          return ConstrainedCenter(
+            maxWidth: Breakpoints.listMaxWidth,
+            child: CustomScrollView(
             slivers: [
               SliverToBoxAdapter(
                 child: Padding(
@@ -72,6 +76,7 @@ class RadioScreen extends StatelessWidget {
                 ),
               ),
             ],
+            ),
           );
         },
       ),

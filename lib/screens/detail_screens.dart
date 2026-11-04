@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../core/responsive.dart';
 import '../core/utils.dart';
 import '../models/models.dart';
 import '../services/library_service.dart';
@@ -38,6 +39,19 @@ class _DetailScaffold extends StatelessWidget {
     this.albumContext = false,
   });
 
+  /// 曲目列表 sliver（紧凑形态与宽屏双栏共用同一份构建）
+  Widget _trackSliver(BuildContext context) {
+    return SliverList.builder(
+      itemCount: tracks.length,
+      itemBuilder: (context, i) => TrackTile(
+        track: tracks[i],
+        trackNumber: albumContext ? i + 1 : null,
+        trackTotal: albumContext ? tracks.length : null,
+        onTap: () => context.read<PlayerService>().playQueue(tracks, i),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -48,6 +62,67 @@ class _DetailScaffold extends StatelessWidget {
         onReachEnd?.call();
       }
     });
+    // 宽屏（≥900）主从双栏：左固定信息栏（大封面 + 标题/副标题/
+    // 元信息 + 播放全部），右曲目列表独立滚动；列表不再被横向
+    // 拉满整窗。compact/medium 走下方原沉浸头部布局，逐字不变。
+    if (isExpanded(context)) {
+      return Scaffold(
+        appBar: AppBar(
+          title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
+          actions: [?favoriteButton],
+        ),
+        body: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 360,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    CoverImage(
+                        cover: cover, width: 312, height: 312, radius: 16),
+                    const SizedBox(height: 16),
+                    Text(title,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.headlineSmall),
+                    if (subtitle.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(subtitle,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodyMedium),
+                    ],
+                    if (meta != null) ...[
+                      const SizedBox(height: 6),
+                      Text(meta!, style: Theme.of(context).textTheme.bodySmall),
+                    ],
+                    const SizedBox(height: 16),
+                    FilledButton.icon(
+                      icon: const Icon(Icons.play_arrow),
+                      label: Text('播放全部 (${tracks.length})'),
+                      onPressed: tracks.isEmpty ? null : onPlayAll,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const VerticalDivider(thickness: 1, width: 1),
+            Expanded(
+              child: CustomScrollView(
+                controller: controller,
+                slivers: [
+                  _trackSliver(context),
+                  const SliverToBoxAdapter(child: SizedBox(height: 16)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
     return Scaffold(
       body: CustomScrollView(
         controller: controller,
@@ -122,16 +197,7 @@ class _DetailScaffold extends StatelessWidget {
               ),
             ),
           ),
-          SliverList.builder(
-            itemCount: tracks.length,
-            itemBuilder: (context, i) => TrackTile(
-              track: tracks[i],
-              trackNumber: albumContext ? i + 1 : null,
-              trackTotal: albumContext ? tracks.length : null,
-              onTap: () =>
-                  context.read<PlayerService>().playQueue(tracks, i),
-            ),
-          ),
+          _trackSliver(context),
           const SliverToBoxAdapter(child: SizedBox(height: 16)),
         ],
       ),
@@ -321,7 +387,11 @@ class ArtistScreen extends StatelessWidget {
         final (info, tracks, albums) = snap.data!;
         return Scaffold(
           appBar: AppBar(title: Text(info.name.isNotEmpty ? info.name : artist.name)),
-          body: CustomScrollView(
+          // 宽屏自适应：内容限宽居中（头部信息量小，不做双栏），
+          // 专辑网格按卡片最大宽自动增列
+          body: ConstrainedCenter(
+            maxWidth: Breakpoints.listMaxWidth,
+            child: CustomScrollView(
             slivers: [
               SliverToBoxAdapter(
                 child: Padding(
@@ -359,8 +429,8 @@ class ArtistScreen extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   sliver: SliverGrid(
                     gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
+                        const SliverGridDelegateWithMaxCrossAxisExtent(
+                      maxCrossAxisExtent: Breakpoints.cardMaxExtent,
                       mainAxisSpacing: 14,
                       crossAxisSpacing: 14,
                       childAspectRatio: 0.85,
@@ -398,6 +468,7 @@ class ArtistScreen extends StatelessWidget {
               ],
               const SliverToBoxAdapter(child: SizedBox(height: 16)),
             ],
+            ),
           ),
         );
       },

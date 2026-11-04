@@ -1,7 +1,7 @@
 // 播放面补强验收：
 //
-// - 专辑名：移动播放页与桌面播放页的曲目信息区都显示专辑名
-//   （数据缺失时整行不渲染，不编造）；
+// - 专辑名：与歌手名拼成同一行「歌手 · 专辑」显示（移动/桌面
+//   播放页同一口径；专辑数据缺失时该行只显示歌手名，不编造）；
 // - MiniPlayer 时长：歌手行尾常驻总时长「歌手 · 3:33」（引擎
 //   时长未就绪时退曲目元数据时长）；无时长数据时不拼占位；
 // - 正在播放相关面补播放/暂停：桌面播放页「队列」表原本只有
@@ -21,7 +21,9 @@ import 'package:qinyin/services/library_service.dart';
 import 'package:qinyin/services/play_resolver.dart';
 import 'package:qinyin/services/player_service.dart';
 import 'package:qinyin/services/settings_service.dart';
+import 'package:qinyin/widgets/cover_image.dart';
 import 'package:qinyin/widgets/mini_player.dart';
+import 'package:qinyin/widgets/seek_bar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 SeoTrack fakeSeo(Track track) => SeoTrack(
@@ -114,14 +116,83 @@ void main() {
     h.player.dispose();
   });
 
-  testWidgets('移动播放页：曲目信息区显示专辑名', (tester) async {
+  testWidgets('移动播放页：专辑名与歌手名拼成一行', (tester) async {
     useSurface(tester, const Size(390, 844), 3.0);
     final h = Harness();
     await h.init([song('p1'), song('p2')]);
     await tester.pumpWidget(h.app(const PlayerScreen()));
     await pumpFrames(tester);
-    expect(find.text('专辑甲'), findsWidgets,
-        reason: '歌手行下方专辑名行（AlbumLine）应出现');
+    expect(find.text('歌手甲 · 专辑甲'), findsWidgets,
+        reason: '专辑名拼在歌手名同一行（「歌手 · 专辑」），不再独占一行');
+    expect(find.text('专辑甲'), findsNothing,
+        reason: '不应再有独立成行的专辑名');
+    h.player.dispose();
+  });
+
+  testWidgets('新鲜播放页 360 宽：无溢出、无标题字样、封面正方形',
+      (tester) async {
+    useSurface(tester, const Size(360, 740), 1.0);
+    final h = Harness();
+    // 大计数让计数/操作行在窄宽下达到真实长度（溢出实报场景）
+    const big = Track(
+      id: 'big1',
+      name: '长名字歌曲长名字歌曲',
+      artists: [ArtistRef(id: 'ar1', name: '歌手甲')],
+      albumName: '专辑甲',
+      durationMs: 213000,
+      countCollected: 1234567,
+      countComment: 987654,
+      countShared: 456789,
+    );
+    await h.init([big, song('big2')]);
+    await tester.pumpWidget(h.app(const PlayerScreen()));
+    await pumpFrames(tester);
+    expect(tester.takeException(), isNull,
+        reason: '360 窄宽下计数/操作行不得溢出（RenderFlex overflow）');
+    expect(find.text('新鲜模式'), findsNothing,
+        reason: '头部「新鲜模式」字样已按用户实报删除');
+    // 封面正方形：CoverImage 的宽高相等（不再全宽×定高被压扁）
+    final coverSize = tester.getSize(find.byType(CoverImage).first);
+    expect(coverSize.width, closeTo(coverSize.height, 0.5),
+        reason: '封面应按正方形原始比例呈现');
+    h.player.dispose();
+  });
+
+  testWidgets('新鲜播放页底部：上/下/列表三键齐全，无「发现/我的」',
+      (tester) async {
+    useSurface(tester, const Size(390, 844), 1.0);
+    final h = Harness();
+    await h.init([song('b1'), song('b2'), song('b3')]);
+    await tester.pumpWidget(h.app(const PlayerScreen()));
+    await pumpFrames(tester);
+    expect(tester.takeException(), isNull);
+    expect(find.byIcon(Icons.skip_previous), findsWidgets,
+        reason: '底部行应有上一首键');
+    expect(find.byIcon(Icons.skip_next), findsWidgets,
+        reason: '底部行应有下一首键');
+    expect(find.byTooltip('播放队列'), findsWidgets,
+        reason: '底部行应有打开队列的列表键');
+    expect(find.text('发现'), findsNothing,
+        reason: '原底部「发现」键已按用户实报去掉');
+    expect(find.text('我的'), findsNothing,
+        reason: '原底部「我的」键已按用户实报去掉');
+    h.player.dispose();
+  });
+
+  testWidgets('新鲜播放页 390 宽：计数行贴底（与进度条间距收紧）',
+      (tester) async {
+    useSurface(tester, const Size(390, 844), 1.0);
+    final h = Harness();
+    await h.init([song('t1'), song('t2')]);
+    await tester.pumpWidget(h.app(const PlayerScreen()));
+    await pumpFrames(tester);
+    expect(tester.takeException(), isNull);
+    // 操作行（分享图标所在行）底部与进度条顶部的间距：钉底后只剩
+    // 页内固定 8px 上下间隙，远小于原贴顶布局的整页空白
+    final shareRect = tester.getRect(find.byIcon(Icons.share_outlined));
+    final seekRect = tester.getRect(find.byType(SeekBar));
+    expect(seekRect.top - shareRect.bottom, lessThan(40),
+        reason: '计数/操作行应钉在本页底部，不留大片空白');
     h.player.dispose();
   });
 
@@ -131,8 +202,10 @@ void main() {
     await h.init([song('d1'), song('d2')]);
     await tester.pumpWidget(h.app(const DesktopPlayer()));
     await pumpFrames(tester);
-    expect(find.text('专辑甲'), findsWidgets,
-        reason: '桌面播放页曲目信息区应有专辑名行');
+    expect(find.text('歌手甲 · 专辑甲'), findsWidgets,
+        reason: '桌面播放页专辑名拼在歌手名同一行，不再独占一行');
+    expect(find.text('专辑甲'), findsNothing,
+        reason: '不应再有独立成行的专辑名');
     // 打开队列表：表头应有「播放队列」与播放/暂停键（原来只有点选跳播）
     expect(find.byIcon(Icons.play_arrow), findsNothing,
         reason: '打开队列前桌面播放页本体无播放键（控制在壳层通栏）');

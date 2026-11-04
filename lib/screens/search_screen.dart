@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../core/responsive.dart';
 import '../core/utils.dart';
 import '../models/models.dart';
 import '../services/library_service.dart';
@@ -332,17 +333,25 @@ class _SearchScreenState extends State<SearchScreen>
                 ],
               ),
       ),
+      // 宽屏自适应：浏览区与结果列表统一限宽居中（AppBar 与页签
+      // 条是窗口 chrome，保持满宽）；compact 下约束不起作用。
       body: _activeQuery == null
-          ? _buildBrowse(library)
+          ? ConstrainedCenter(
+              maxWidth: Breakpoints.searchMaxWidth,
+              child: _buildBrowse(library),
+            )
           : _platform == null
               ? const Center(child: CircularProgressIndicator())
-              : TabBarView(
-                  controller: _tabs,
-                  children: [
-                    _buildTracks(),
-                    _buildArtists(),
-                    _buildPlaylists(),
-                  ],
+              : ConstrainedCenter(
+                  maxWidth: Breakpoints.searchMaxWidth,
+                  child: TabBarView(
+                    controller: _tabs,
+                    children: [
+                      _buildTracks(),
+                      _buildArtists(),
+                      _buildPlaylists(),
+                    ],
+                  ),
                 ),
     );
   }

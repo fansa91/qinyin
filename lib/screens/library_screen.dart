@@ -38,13 +38,18 @@ class LibraryScreen extends StatelessWidget {
             ],
           ),
         ),
-        body: const TabBarView(
-          children: [
-            _FavTracksTab(),
-            _FavCollectionsTab(),
-            _MyPlaylistsTab(),
-            _HistoryTab(),
-          ],
+        // 宽屏自适应：四个页签的列表统一限宽居中（表单类页面
+        // 口径 800），不再拉满整窗；AppBar/页签条为页面 chrome
+        // 保持满宽。compact 下约束不起作用。
+        body: const ConstrainedCenter(
+          child: TabBarView(
+            children: [
+              _FavTracksTab(),
+              _FavCollectionsTab(),
+              _MyPlaylistsTab(),
+              _HistoryTab(),
+            ],
+          ),
         ),
       ),
     );
@@ -208,7 +213,9 @@ class LocalPlaylistScreen extends StatelessWidget {
     final tracks = playlist.tracks;
     return Scaffold(
       appBar: AppBar(title: Text(playlist.name)),
-      body: Column(
+      body: formPage(
+        context,
+        Column(
         children: [
           ListTile(
             leading: const Icon(Icons.play_arrow),
@@ -242,6 +249,7 @@ class LocalPlaylistScreen extends StatelessWidget {
                   ),
           ),
         ],
+        ),
       ),
     );
   }

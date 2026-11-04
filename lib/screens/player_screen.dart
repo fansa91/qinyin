@@ -49,14 +49,26 @@ class FreshPlayer extends StatelessWidget {
     final player = context.watch<PlayerService>();
     if (!player.hasQueue) {
       return Scaffold(
-        appBar: AppBar(title: const Text('新鲜模式')),
+        // 空队列兜底页同样不挂「新鲜模式」字样（用户口径一致）
+        appBar: AppBar(),
         body: const Center(child: Text('暂无播放队列')),
       );
     }
+    final pager = FreshPager(
+      pageBuilder: (context, track, i) => _FreshPage(track: track, index: i),
+    );
+    // medium 档（600–899）自适应：竖滑页是手机形态，整列居中限宽，
+    // 不横向拉满；≥900 走 DesktopPlayer 双栏、compact 逐字不变。
     return Scaffold(
-      body: FreshPager(
-        pageBuilder: (context, track, i) => _FreshPage(track: track, index: i),
-      ),
+      body: isWide(context)
+          ? Center(
+              child: ConstrainedBox(
+                constraints:
+                    const BoxConstraints(maxWidth: Breakpoints.paneMaxWidth),
+                child: pager,
+              ),
+            )
+          : pager,
     );
   }
 }
@@ -162,12 +174,9 @@ class _FreshContentState extends State<_FreshContent> {
                 icon: const Icon(Icons.keyboard_arrow_down),
                 onPressed: () => Navigator.pop(context),
               ),
-              const Expanded(
-                child: Text(
-                  '新鲜模式',
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
-                ),
-              ),
+              // 头部不挂任何标题字样（用户实报去掉「新鲜模式」），
+              // 只留收起 / 搜索两个按钮，中间留空
+              const Spacer(),
               IconButton(
                 icon: const Icon(Icons.search),
                 onPressed: () => Navigator.pushNamed(context, '/search'),
@@ -196,39 +205,62 @@ class _FreshContentState extends State<_FreshContent> {
           else
             const SizedBox(height: 76),
           const SizedBox(height: 8),
+          // 底部控制行（用户实报换人）：原 [发现][播放/暂停][我的]
+          // 两侧键与播放无关——换成标准播放控制：上一首/播放暂停/
+          // 下一首居中成组（左右等宽占位保证居中），列表键置行末
+          // 打开当前队列（与桌面播放页共用同一份队列弹层，可跳播）。
+          // 切歌走 PlayerService.prev/next，与滑动/自动推进同一入口。
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _BottomKey(
-                icon: Icons.explore_outlined,
-                label: '发现',
-                onTap: () => Navigator.popUntil(context, (r) => r.isFirst),
-              ),
-              IconButton.filled(
-                iconSize: 34,
-                icon: Icon(
-                  player.loading && isCurrent
-                      ? Icons.hourglass_top
-                      : (player.playing && isCurrent)
-                      ? Icons.pause
-                      : Icons.play_arrow,
+              const SizedBox(width: 56),
+              Expanded(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    IconButton(
+                      tooltip: '上一首',
+                      icon: const Icon(Icons.skip_previous),
+                      iconSize: 30,
+                      onPressed: player.prev,
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton.filled(
+                      iconSize: 34,
+                      icon: Icon(
+                        player.loading && isCurrent
+                            ? Icons.hourglass_top
+                            : (player.playing && isCurrent)
+                            ? Icons.pause
+                            : Icons.play_arrow,
+                      ),
+                      onPressed: () async {
+                        if (isCurrent) {
+                          await player.toggle();
+                        } else {
+                          await player.jumpTo(
+                            player.queueItems
+                                .indexWhere((t) => t.id == track.id),
+                          );
+                        }
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      tooltip: '下一首',
+                      icon: const Icon(Icons.skip_next),
+                      iconSize: 30,
+                      onPressed: player.next,
+                    ),
+                  ],
                 ),
-                onPressed: () async {
-                  if (isCurrent) {
-                    await player.toggle();
-                  } else {
-                    await player.jumpTo(
-                      player.queueItems.indexWhere((t) => t.id == track.id),
-                    );
-                  }
-                },
               ),
-              _BottomKey(
-                icon: Icons.person_outline,
-                label: '我的',
-                onTap: () {
-                  Navigator.popUntil(context, (r) => r.isFirst);
-                },
+              SizedBox(
+                width: 56,
+                child: IconButton(
+                  tooltip: '播放队列',
+                  icon: const Icon(Icons.queue_music),
+                  onPressed: () => DesktopPlayer.showQueueSheet(context),
+                ),
               ),
             ],
           ),
@@ -257,24 +289,33 @@ class _FreshContentState extends State<_FreshContent> {
     final player = context.watch<PlayerService>();
     final library = context.watch<LibraryService>();
     final scheme = Theme.of(context).colorScheme;
+    // 封面保持正方形原始比例（用户实报被压扁）：此前是全宽 × 屏高
+    // 30% 定高的宽扁盒子，BoxFit.cover 把方形封面裁压变形。改后
+    // 边长 = min(屏高 30%, 页宽)，正方形呈现、整幅居中。
+    final screen = MediaQuery.sizeOf(context);
+    var coverSide = screen.height * 0.30;
+    final pageWidth = screen.width - 40; // 本页左右 padding 各 20
+    if (coverSide > pageWidth) coverSide = pageWidth;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        GestureDetector(
-          onTap: () => _hController.animateToPage(
-            0,
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOut,
-          ),
-          child: CoverImage(
-            cover: fullTrack.cover,
-            width: double.infinity,
-            height: MediaQuery.sizeOf(context).height * 0.30,
-            radius: 16,
-            small: false,
+        Center(
+          child: GestureDetector(
+            onTap: () => _hController.animateToPage(
+              0,
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOut,
+            ),
+            child: CoverImage(
+              cover: fullTrack.cover,
+              width: coverSide,
+              height: coverSide,
+              radius: 16,
+              small: false,
+            ),
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
         Text(
           fullTrack.name,
           maxLines: 1,
@@ -282,18 +323,25 @@ class _FreshContentState extends State<_FreshContent> {
           style: Theme.of(context).textTheme.headlineSmall,
         ),
         const SizedBox(height: 4),
+        // 歌手 · 专辑拼成一行（专辑不独占行；缺专辑时只显示歌手）
         Text(
-          fullTrack.artistNames,
+          artistAlbumText(fullTrack),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: Theme.of(
             context,
           ).textTheme.titleMedium?.copyWith(color: scheme.onSurfaceVariant),
         ),
-        if (fullTrack.albumName.isNotEmpty) ...[
-          const SizedBox(height: 4),
-          AlbumLine(albumName: fullTrack.albumName),
-        ],
-        const SizedBox(height: 14),
-        Row(
+        // 计数/操作行钉在本页底部：中间空白由 Spacer 吃掉，原来
+        // 内容贴顶、该行下方留一大片空区（用户实报底部空区太大）
+        const Spacer(),
+        // 计数/操作行改流式换行（用户实报溢出）：收藏/评论/分享/
+        // 下载 + 音质芯片原先单行 Row 硬排，360 窄宽下计数一长
+        // 必溢出；Wrap 宽屏仍是一行、窄屏自动折行，间距同步收紧。
+        Wrap(
+          spacing: 12,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             _StatButton(
               icon: library.isFavTrack(track.id)
@@ -303,13 +351,11 @@ class _FreshContentState extends State<_FreshContent> {
               active: library.isFavTrack(track.id),
               onTap: () => library.toggleFavTrack(fullTrack),
             ),
-            const SizedBox(width: 18),
             _StatButton(
               icon: Icons.mode_comment_outlined,
               label: formatCount(fullTrack.countComment ?? 0),
               onTap: seo == null ? null : () => _showComments(context, seo),
             ),
-            const SizedBox(width: 18),
             _StatButton(
               icon: Icons.share_outlined,
               label: formatCount(fullTrack.countShared ?? 0),
@@ -319,9 +365,7 @@ class _FreshContentState extends State<_FreshContent> {
                 ),
               ),
             ),
-            const SizedBox(width: 18),
             TrackDownloadButton(track: fullTrack),
-            const Spacer(),
             ActionChip(
               avatar: const Icon(Icons.high_quality, size: 16),
               label: Text(
@@ -399,6 +443,7 @@ class _FreshContentState extends State<_FreshContent> {
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
+      constraints: const BoxConstraints(maxWidth: Breakpoints.sheetMaxWidth),
       builder: (ctx) => SizedBox(
         height: MediaQuery.sizeOf(ctx).height * 0.5,
         child: SafeArea(
@@ -413,6 +458,8 @@ class _FreshContentState extends State<_FreshContent> {
     final player = context.read<PlayerService>();
     showModalBottomSheet<void>(
       context: context,
+      constraints:
+          const BoxConstraints(maxWidth: Breakpoints.menuSheetMaxWidth),
       builder: (ctx) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -471,31 +518,6 @@ class _StatButton extends StatelessWidget {
           Icon(icon, color: active ? scheme.primary : null),
           const SizedBox(width: 4),
           Text(label),
-        ],
-      ),
-    );
-  }
-}
-
-class _BottomKey extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  const _BottomKey({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon),
-          Text(label, style: const TextStyle(fontSize: 12)),
         ],
       ),
     );
@@ -566,11 +588,15 @@ class DesktopPlayer extends StatelessWidget {
             IconButton(
               tooltip: '队列',
               icon: const Icon(Icons.queue_music),
-              onPressed: () => _showQueue(context),
+              onPressed: () => showQueueSheet(context),
             ),
         ],
       ),
-      body: Row(
+      // 超宽封顶：两栏内容最大宽居中，窗口再宽两栏也不无限拉开
+      // （≤1440 时约束不起作用，布局与原来一致）
+      body: ConstrainedCenter(
+        maxWidth: Breakpoints.playerMaxWidth,
+        child: Row(
         children: [
           Expanded(
             // 矮窗口时左栏（封面+控制行+信息）可能超高：可滚动兜底，
@@ -661,18 +687,15 @@ class DesktopPlayer extends StatelessWidget {
                           ],
                         ),
                         const SizedBox(height: 6),
+                        // 歌手 · 专辑拼成一行（专辑不独占行；缺专辑
+                        // 时只显示歌手），与移动端同一口径
                         Text(
-                          fullTrack.artistNames,
+                          artistAlbumText(fullTrack),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: Theme.of(context).textTheme.titleMedium
                               ?.copyWith(color: scheme.onSurfaceVariant),
                         ),
-                        if (fullTrack.albumName.isNotEmpty) ...[
-                          const SizedBox(height: 4),
-                          AlbumLine(
-                            albumName: fullTrack.albumName,
-                            center: true,
-                          ),
-                        ],
                         const SizedBox(height: 10),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -783,7 +806,8 @@ class DesktopPlayer extends StatelessWidget {
               ),
             ),
           ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -796,10 +820,14 @@ class DesktopPlayer extends StatelessWidget {
     _ => key,
   };
 
-  void _showQueue(BuildContext context) {
+  /// 主会话队列弹层（静态方法：桌面播放页 AppBar 队列键与移动
+  /// 新鲜播放页底部列表键共用同一份实现——表头播放/暂停键 +
+  /// 点选跳播，全 App 只有这一份队列列表，不要另造）
+  static void showQueueSheet(BuildContext context) {
     final player = context.read<PlayerService>();
     showModalBottomSheet<void>(
       context: context,
+      constraints: const BoxConstraints(maxWidth: Breakpoints.sheetMaxWidth),
       builder: (ctx) => SafeArea(
         // ListenableBuilder 让表头播放/暂停键与列表选中态跟随全局
         // 播放状态实时同步（点表头键不关表、图标原地翻转）
@@ -1030,7 +1058,11 @@ class LyricsScreen extends StatelessWidget {
             ),
         ],
       ),
-      body: LyricList(lines: lines, currentIndex: idx),
+      // 宽屏自适应：歌词是阅读型内容，限宽居中（行长封顶），
+      // 不拉满整窗；compact 下约束不起作用
+      body: ConstrainedCenter(
+        child: LyricList(lines: lines, currentIndex: idx),
+      ),
     );
   }
 }
@@ -1097,7 +1129,8 @@ class CommentsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('评论')),
-      body: CommentsList(comments: seo.comments),
+      // 宽屏自适应：与歌词页同一阅读限宽口径
+      body: ConstrainedCenter(child: CommentsList(comments: seo.comments)),
     );
   }
 }

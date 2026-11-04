@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../core/responsive.dart';
 import '../core/utils.dart';
 import '../models/models.dart';
 import '../services/download_service.dart';
@@ -110,6 +111,8 @@ class TrackTile extends StatelessWidget {
     final downloads = context.read<DownloadService>();
     showModalBottomSheet<void>(
       context: context,
+      constraints:
+          const BoxConstraints(maxWidth: Breakpoints.menuSheetMaxWidth),
       builder: (ctx) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -183,6 +186,8 @@ class TrackTile extends StatelessWidget {
     final library = context.read<LibraryService>();
     showModalBottomSheet<void>(
       context: context,
+      constraints:
+          const BoxConstraints(maxWidth: Breakpoints.menuSheetMaxWidth),
       builder: (ctx) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,

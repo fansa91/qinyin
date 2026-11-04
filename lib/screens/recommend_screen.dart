@@ -435,7 +435,7 @@ class _RecommendScreenState extends State<RecommendScreen> {
 
   Widget _buildSwipe(BuildContext context) {
     final player = context.watch<PlayerService>();
-    return Column(
+    final column = Column(
       children: [
         _header(context),
         Expanded(
@@ -461,6 +461,16 @@ class _RecommendScreenState extends State<RecommendScreen> {
           ),
         ),
       ],
+    );
+    // medium 档（600–899）自适应：竖滑页是手机形态，整列（含页头）
+    // 居中限宽，不把封面与控件横向拉满；≥900 走 DesktopPlayer
+    // 双栏、compact 逐字不变。
+    if (!isWide(context)) return column;
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: Breakpoints.paneMaxWidth),
+        child: column,
+      ),
     );
   }
 
@@ -609,9 +619,17 @@ class _RecommendScreenState extends State<RecommendScreen> {
   void _showScenePicker() {
     final modes = _modes;
     if (modes == null || modes.isEmpty) return;
+    // 宽屏下弹层限宽居中（不再全宽拉伸），网格列数随窗口宽增列
+    final windowWidth = MediaQuery.sizeOf(context).width;
+    final columns = windowWidth >= Breakpoints.expanded
+        ? 5
+        : windowWidth >= Breakpoints.medium
+            ? 4
+            : 3;
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      constraints: const BoxConstraints(maxWidth: Breakpoints.sheetMaxWidth),
       builder: (ctx) => SafeArea(
         child: SizedBox(
           height: MediaQuery.of(ctx).size.height * 0.7,
@@ -621,9 +639,8 @@ class _RecommendScreenState extends State<RecommendScreen> {
               Expanded(
                 child: GridView.builder(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                  gridDelegate:
-                      const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 3,
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: columns,
                     mainAxisSpacing: 12,
                     crossAxisSpacing: 12,
                     childAspectRatio: 0.82,
@@ -668,6 +685,7 @@ class _RecommendScreenState extends State<RecommendScreen> {
     // 会话下标。徽标与移动端 TrackTile 同一套（音质 + VIP）。
     showModalBottomSheet<void>(
       context: context,
+      constraints: const BoxConstraints(maxWidth: Breakpoints.sheetMaxWidth),
       builder: (ctx) => SafeArea(
         // ListenableBuilder 让表头播放/暂停键与选中态随推荐会话
         // 状态实时同步
@@ -939,8 +957,9 @@ class _RecommendFreshPageState extends State<_RecommendFreshPage> {
           style: Theme.of(context).textTheme.headlineSmall,
         ),
         const SizedBox(height: 4),
+        // 歌手 · 专辑拼成一行（专辑不独占行；缺专辑时只显示歌手）
         Text(
-          fullTrack.artistNames,
+          artistAlbumText(fullTrack),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: Theme.of(context)
@@ -948,10 +967,6 @@ class _RecommendFreshPageState extends State<_RecommendFreshPage> {
               .titleMedium
               ?.copyWith(color: scheme.onSurfaceVariant),
         ),
-        if (fullTrack.albumName.isNotEmpty) ...[
-          const SizedBox(height: 4),
-          AlbumLine(albumName: fullTrack.albumName),
-        ],
         const SizedBox(height: 14),
         // 互动计数（平台/seo 真数字，只读展示，不做假互动）；
         // 评论计数可点：开遮盖式评论抽屉（见 _showComments）
@@ -1028,6 +1043,7 @@ class _RecommendFreshPageState extends State<_RecommendFreshPage> {
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
+      constraints: const BoxConstraints(maxWidth: Breakpoints.sheetMaxWidth),
       builder: (ctx) => SizedBox(
         height: MediaQuery.sizeOf(ctx).height * 0.5,
         child: SafeArea(
