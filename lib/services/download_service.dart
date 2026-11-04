@@ -100,6 +100,16 @@ Future<({String status, String error})> applyDownloadTags(
   return (status: 'failed', error: full.error ?? '未知原因');
 }
 
+/// VIP 曲目游客只能解析到试听段：下载拒绝（不落残段文件），
+/// 由 UI 原样提示。实测依据见 QISHUI_API.md §17。
+class VipDownloadException implements Exception {
+  final String message;
+  const VipDownloadException(
+      [this.message = '该歌曲为 VIP 歌曲，游客只能试听，无法下载完整版']);
+  @override
+  String toString() => message;
+}
+
 class DownloadTask {
   final String trackId;
   final String title;
@@ -200,9 +210,13 @@ class DownloadService extends ChangeNotifier {
     if (_tasks.containsKey(track.id)) {
       throw StateError('正在下载中');
     }
-    // 下载前重解析（链接 24h 过期）
-    final resolved =
-        await resolver.resolve(track.id, quality: quality, forceRefresh: true);
+    // 下载前重解析（链接 24h 过期）+ 完整性判定：解析到的若只是
+    // 试听段（VIP 曲目游客常态，§17），不下载残段、明确提示需 VIP。
+    final check = await resolver.resolveForDownload(track, quality: quality);
+    if (!check.complete) {
+      throw const VipDownloadException();
+    }
+    final resolved = check.resolved;
     final dir = await _downloadDir();
     final base = renderDownloadFilename(
       settings.filenameFormat,

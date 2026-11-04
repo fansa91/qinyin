@@ -14,6 +14,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:qinyin/models/models.dart';
 import 'package:qinyin/screens/player_screen.dart';
+import 'package:qinyin/services/download_service.dart';
 import 'package:qinyin/services/library_service.dart';
 import 'package:qinyin/services/play_resolver.dart';
 import 'package:qinyin/services/player_service.dart';
@@ -49,6 +50,8 @@ void main() {
     await library.init();
     final resolver = PlayResolver((id) async => fakeSeo(id));
     final player = PlayerService(resolver, settings, library);
+    // 播放页含下载按钮（与 main.dart 同口径提供 DownloadService）
+    final downloads = DownloadService(resolver, settings);
     // 注意：必须在测试体结尾显式 dispose（框架的 Timer 不变量检查
     // 早于 addTearDown 执行，靠 addTearDown 取消周期 Timer 会误报）
 
@@ -70,6 +73,7 @@ void main() {
           ChangeNotifierProvider.value(value: settings),
           ChangeNotifierProvider.value(value: library),
           ChangeNotifierProvider.value(value: player),
+          ChangeNotifierProvider.value(value: downloads),
           Provider.value(value: resolver),
         ],
         child: const MaterialApp(home: FreshPlayer()),

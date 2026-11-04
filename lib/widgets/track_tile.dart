@@ -129,6 +129,11 @@ class TrackTile extends StatelessWidget {
                       ScaffoldMessenger.of(context)
                           .showSnackBar(const SnackBar(content: Text('下载完成')));
                     }
+                  } on VipDownloadException catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context)
+                          .showSnackBar(SnackBar(content: Text(e.message)));
+                    }
                   } catch (e) {
                     if (context.mounted) {
                       ScaffoldMessenger.of(context)

@@ -27,6 +27,13 @@ class ResolvedPlay {
   bool get isLocal => localPath != null && localPath!.isNotEmpty;
 }
 
+/// 下载解析结果：定版流 + 完整性判定（试听段识别，见 [PlayResolver.streamComplete]）
+class DownloadResolution {
+  final ResolvedPlay resolved;
+  final bool complete;
+  const DownloadResolution(this.resolved, this.complete);
+}
+
 /// 播放解析：经 seo_track 取流，按设置音质选档，就近回落；
 /// SeoTrack 按 expire_at 缓存（留 60s 余量），过期自动重拉。
 /// 设置为无损且曲目带平台 B 路 lossless 时，走 [LosslessCache] 解密本地播。
@@ -86,6 +93,57 @@ class PlayResolver {
     if (stream == null) throw PlayUnavailable();
     return ResolvedPlay(
         trackId: trackId, stream: stream, expireAt: seoData.expireAt);
+  }
+
+  /// 流的推算时长（秒）：video_meta 的 size/bitrate 可反推该流的实际
+  /// 音频时长（QISHUI_API.md §17.2 实测与 ffprobe 逐首吻合到小数点后
+  /// 两位）；元数据缺失返回 null。
+  static double? impliedSeconds(PlayStream stream) =>
+      (stream.size > 0 && stream.bitrate > 0)
+          ? stream.size * 8 / stream.bitrate
+          : null;
+
+  /// 完整性判定（§17 实测口径）：所选流是整曲还是试听段。
+  /// 首选时长对比——推算时长覆盖曲目时长 ≥90% 为完整（试听段实测
+  /// 只有 30s/60s 两档、占比 ≤0.36，不会误伤）；推算时长与曲目时长
+  /// 任一缺失时退回 seo 侧标记：seo 曲目带 only_vip_playable
+  /// （[SeoTrack.track] 解析为 Track.isVip）的游客只下发试听段，
+  /// 其余视为完整。判定依据是完整性本身而非 VIP 身份：VIP 曲目
+  /// 若某路给了全曲流（推算时长达标）一样判完整、放行下载。
+  static bool streamComplete({
+    required PlayStream stream,
+    required int trackDurationMs,
+    required bool seoIsVip,
+  }) {
+    final implied = impliedSeconds(stream);
+    if (implied != null && trackDurationMs > 0) {
+      return implied >= trackDurationMs / 1000 * 0.9;
+    }
+    return !seoIsVip;
+  }
+
+  /// 下载专用解析：在 [resolve] 之外多给完整性判定，供下载链路
+  /// 决定是否放行（播放不走这里——试听段照常可播）。
+  /// 曲目时长以入参 Track 为准，缺失时用 seo 侧曲目时长兜底。
+  Future<DownloadResolution> resolveForDownload(
+    Track track, {
+    required String quality,
+    bool forceRefresh = true,
+  }) async {
+    final seoData = await seo(track.id, forceRefresh: forceRefresh);
+    final stream = selectStream(seoData.streams, quality);
+    if (stream == null) throw PlayUnavailable();
+    final durationMs =
+        track.durationMs > 0 ? track.durationMs : seoData.track.durationMs;
+    return DownloadResolution(
+      ResolvedPlay(
+          trackId: track.id, stream: stream, expireAt: seoData.expireAt),
+      streamComplete(
+        stream: stream,
+        trackDurationMs: durationMs,
+        seoIsVip: seoData.track.isVip,
+      ),
+    );
   }
 
   /// 预取：把 seo 拉进缓存（播放/下载/歌词都受益），失败静默

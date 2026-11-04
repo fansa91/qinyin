@@ -14,6 +14,7 @@ import '../services/play_resolver.dart';
 import '../services/player_service.dart';
 import '../services/settings_service.dart';
 import '../widgets/cover_image.dart';
+import '../widgets/download_button.dart';
 import '../widgets/fresh_pager.dart';
 import '../widgets/seek_bar.dart';
 
@@ -221,6 +222,8 @@ class _FreshContentState extends State<_FreshContent> {
                       text: '我在沁音听《${fullTrack.name}》- ${fullTrack.artistNames}'),
                 ),
               ),
+              const SizedBox(width: 18),
+              TrackDownloadButton(track: fullTrack),
               const Spacer(),
               ActionChip(
                 avatar: const Icon(Icons.high_quality, size: 16),
@@ -483,6 +486,8 @@ class DesktopPlayer extends StatelessWidget {
                       const Icon(Icons.mode_comment_outlined, size: 18),
                       const SizedBox(width: 4),
                       Text(formatCount(fullTrack.countComment ?? 0)),
+                      const SizedBox(width: 20),
+                      TrackDownloadButton(track: fullTrack),
                     ],
                   ),
                   if (player.preparingLossless)
