@@ -9,8 +9,14 @@ import 'play_queue.dart';
 import 'play_resolver.dart';
 import 'settings_service.dart';
 
-/// 播放器：队列推进只有一处实现——按钮、上下滑手势、播完自动推进
-/// 全部走 [next]/[prev]/[_onCompleted] → [PlayQueue] → [_playAt]。
+/// 播放器：全 App 唯一的播放引擎与当前队列持有者（main.dart 构造
+/// 一份、Provider 全局注入；内部只有一个 AudioPlayer 实例）。
+/// 所有来源（首页/搜索/详情/电台/我的/下载/推荐）的点播都汇入
+/// [playQueue]/[jumpTo]，MiniPlayer 与各播放面订阅的都是这一份
+/// 状态——不存在第二个播放器或第二条队列。队列推进也只有一处
+/// 实现：按钮、上下滑手势、播完自动推进全部走
+/// [next]/[prev]/[_onCompleted] → [PlayQueue] → [_playAt]。
+/// 来源交接与推荐会话挂起/恢复见 [playQueue] 与 [resumeRecommendQueue]。
 class PlayerService extends ChangeNotifier {
   final PlayResolver resolver;
   final SettingsService settings;
@@ -34,6 +40,29 @@ class PlayerService extends ChangeNotifier {
   /// 推荐页据此判断「队列已经是推荐流」还是「别的内容在播，不要打断」。
   String? queueTag;
   static const String recommendQueueTag = 'recommend';
+
+  /// 被外部来源接管时挂起的推荐会话快照（队列 + 下标 + 续拉回调）。
+  ///
+  /// 推荐不是独立播放器：全 App 只有一个引擎、一条当前队列（见本类
+  /// 顶部注释），推荐流同样活在这条队列里。用户中途去播首页/搜索等
+  /// 其他来源，是正常交接——当前队列被新点播替换；但推荐会话不该
+  /// 就此蒸发：替换前把队列与下标快照下来，推荐页就能从暂停处原样
+  /// 恢复（[resumeRecommendQueue]），而不是每次都从第一首重建。
+  /// 快照只存一份；新的推荐会话建立时清除，恢复后亦清除。
+  List<Track>? _suspendedQueueItems;
+  int _suspendedQueueIndex = 0;
+  Future<List<Track>> Function()? _suspendedLoadMore;
+
+  /// 是否有一份被挂起的推荐会话可恢复
+  bool get hasSuspendedRecommend =>
+      _suspendedQueueItems != null && _suspendedQueueItems!.isNotEmpty;
+
+  /// 挂起的推荐会话停在的那首（供推荐页提示页展示「暂停在《X》」）
+  Track? get suspendedRecommendTrack {
+    final items = _suspendedQueueItems;
+    if (items == null || items.isEmpty) return null;
+    return items[_suspendedQueueIndex.clamp(0, items.length - 1)];
+  }
   Duration _position = Duration.zero;
   Duration _duration = Duration.zero;
   String? _error;
@@ -84,6 +113,12 @@ class PlayerService extends ChangeNotifier {
   List<Track> get queueItems => List.unmodifiable(queue.items);
 
   /// 从某个来源建队列并起播（点播即建队列，照官方 QueueLoader 模型）
+  ///
+  /// 来源交接语义（全 App 统一）：无论点播来自首页/搜索/详情/电台/
+  /// 我的/下载/推荐，进的都是这一条队列。当前队列是推荐流而新点播
+  /// 不是时，先把推荐会话快照挂起（见 [_suspendedQueueItems]），
+  /// 再干净换队——不残留第二份队列状态；新点播本身是推荐流时，
+  /// 视为新会话建立，旧快照作废。
   Future<void> playQueue(
     List<Track> tracks,
     int startIndex, {
@@ -91,10 +126,39 @@ class PlayerService extends ChangeNotifier {
     String? tag,
   }) async {
     if (tracks.isEmpty) return;
+    if (tag == recommendQueueTag) {
+      _clearSuspendedRecommend();
+    } else if (queueTag == recommendQueueTag && !queue.isEmpty) {
+      _suspendedQueueItems = List.of(queue.items);
+      _suspendedQueueIndex = queue.index;
+      _suspendedLoadMore = onLoadMore;
+    }
     onLoadMore = loadMore;
     queueTag = tag;
     queue.setQueue(tracks, startIndex);
     await _playAt(queue.index);
+  }
+
+  void _clearSuspendedRecommend() {
+    _suspendedQueueItems = null;
+    _suspendedQueueIndex = 0;
+    _suspendedLoadMore = null;
+  }
+
+  /// 恢复被挂起的推荐会话：队列、下标、续拉回调原样还原并从挂起处
+  /// 起播（曲内进度由 [_playAt] 的既有续播逻辑按已保存进度恢复）。
+  /// 返回是否确有快照可恢复；无快照时不触碰当前队列。
+  Future<bool> resumeRecommendQueue() async {
+    final items = _suspendedQueueItems;
+    if (items == null || items.isEmpty) return false;
+    final index = _suspendedQueueIndex;
+    final loadMore = _suspendedLoadMore;
+    _clearSuspendedRecommend();
+    onLoadMore = loadMore;
+    queueTag = recommendQueueTag;
+    queue.setQueue(items, index);
+    await _playAt(queue.index);
+    return true;
   }
 
   Future<void> playTrack(Track track) => playQueue([track], 0);

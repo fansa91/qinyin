@@ -33,7 +33,9 @@ import 'player_screen.dart';
 /// 进页衔接策略（不打断优先）：
 /// - 队列已是推荐流 → 直接展示，什么都不动；
 /// - 有别的来源的曲目在播/已载入 → 不抢队列，先出提示页，
-///   用户点「开始刷推荐」才接管（显式动作不算打断）；
+///   用户显式动作才接管：若推荐会话此前被该来源接管挂起
+///   （PlayerService 的会话快照），主按钮是「继续刷推荐」从暂停处
+///   恢复原会话；否则是「开始刷推荐」新建会话；
 /// - 什么都没在播 → 首次切到本页时自动以推荐流建队起播。
 class RecommendScreen extends StatefulWidget {
   /// 当前是否被选中展示（IndexedStack 下靠它感知「进入本页」）
@@ -370,6 +372,12 @@ class _RecommendScreenState extends State<RecommendScreen> {
 
   Widget _buildGate(BuildContext context, PlayerService player) {
     final t = player.currentTrack;
+    // 推荐会话曾被其他来源接管而挂起时，gate 的主动作是「从暂停处
+    // 继续」而不是从头重建：推荐与首页从来是同一条队列，交接只是
+    // 暂停+快照，恢复即原样回到离开时的曲目（见 PlayerService 的
+    // resumeRecommendQueue）。重新开始保留为次级入口。
+    final suspended =
+        player.hasSuspendedRecommend ? player.suspendedRecommendTrack : null;
     return Column(
       children: [
         _header(context),
@@ -397,21 +405,38 @@ class _RecommendScreenState extends State<RecommendScreen> {
                           ),
                     ),
                   const SizedBox(height: 6),
-                  const Text('为不打断当前播放，推荐流还没有接管队列',
-                      style: TextStyle(fontSize: 12)),
-                  const SizedBox(height: 18),
-                  FilledButton.icon(
-                    onPressed:
-                        _starting ? null : () => _startQueue(force: true),
-                    icon: _starting
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.play_arrow),
-                    label: const Text('开始刷推荐'),
+                  Text(
+                    suspended != null
+                        ? '推荐流已暂停在《${suspended.name}》，可以从离开处继续'
+                        : '为不打断当前播放，推荐流还没有接管队列',
+                    style: const TextStyle(fontSize: 12),
+                    textAlign: TextAlign.center,
                   ),
+                  const SizedBox(height: 18),
+                  if (suspended != null) ...[
+                    FilledButton.icon(
+                      onPressed: () => player.resumeRecommendQueue(),
+                      icon: const Icon(Icons.play_arrow),
+                      label: const Text('继续刷推荐'),
+                    ),
+                    TextButton(
+                      onPressed:
+                          _starting ? null : () => _startQueue(force: true),
+                      child: const Text('重新开始推荐'),
+                    ),
+                  ] else
+                    FilledButton.icon(
+                      onPressed:
+                          _starting ? null : () => _startQueue(force: true),
+                      icon: _starting
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.play_arrow),
+                      label: const Text('开始刷推荐'),
+                    ),
                 ],
               ),
             ),
