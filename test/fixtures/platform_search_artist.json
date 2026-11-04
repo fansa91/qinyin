@@ -1,0 +1,236 @@
+{
+ "data": {
+  "extra": {
+   "background_color": "",
+   "empty_search": 2,
+   "log_extra": "{\"query_intention_type\":\"music_related\"}",
+   "search_related_info": ""
+  },
+  "result_groups": [
+   {
+    "data": [
+     {
+      "entity": {
+       "album": {},
+       "artist": {
+        "base_info": {
+         "alias": [
+          "周董",
+          "Chow Chieh-lun",
+          "Chou Jie Lun"
+         ],
+         "born": {
+          "birth_date": "1979年01月18日"
+         },
+         "career": {
+          "occupations": [
+           "作曲家"
+          ]
+         },
+         "count_albums": 0,
+         "count_tracks": 22,
+         "full_display_name": "周杰伦",
+         "id": "6681166129722824706",
+         "intro": "台湾省流行男歌手、演员、词曲创作人、MV及电影导演、编剧及制作人。2000年被吴宗宪发掘，发行首张个人专辑《Jay》。 周杰伦的音乐融合中西方元素，风格多变，四次获得世界音乐大奖最畅销亚洲艺人、中华区8次年度销量冠军（最多）、连续7年IFPI十大销量国语唱片、华语乐坛十年领袖人物、华语乐坛十年最佳男歌手、 MTV亚洲大奖最受欢迎男歌手、世界十大鬼才音乐人之一。代表作品：《龙卷风》、《菊花台》、《青花瓷》、《晴天》。",
+         "name": "周杰伦",
+         "name_translation": "Jay Chou",
+         "nationality": "中国(台湾)",
+         "search_explain_info": "",
+         "simple_display_name": "周杰伦",
+         "url_avatar": {
+          "expire_time": 0,
+          "height": 0,
+          "need_complete_url": false,
+          "template": "",
+          "template_prefix": "tplv-b829550vbb",
+          "uri": "tos-cn-v-2774c002/oEqZ3wEG5AFvfFQGtnI3BNgIDfCKFBAUnBApoI",
+          "urls": [
+           "https://p3-luna.douyinpic.com/img/",
+           "https://p6-luna.douyinpic.com/img/"
+          ],
+          "width": 0
+         }
+        },
+        "relation": {
+         "user_artist_type": 1
+        },
+        "state": {
+         "blocked_by_me": false
+        },
+        "stats": {}
+       },
+       "deeplink": {},
+       "id": "6681166129722824706",
+       "item_type": "artist",
+       "playlist": {},
+       "scene_mode": {},
+       "search_segment": {},
+       "track": {},
+       "video": {}
+      },
+      "meta": {
+       "activity_match": {},
+       "display_style": {},
+       "doc_id": "9cee4f33e3a6d384-8753e64060745b62",
+       "item_type": "artist",
+       "lyrics_match": {
+        "match_end_index": 0,
+        "match_start_index": 0,
+        "snippet": ""
+       },
+       "track_match": {}
+      }
+     },
+     {
+      "entity": {
+       "album": {},
+       "artist": {
+        "base_info": {
+         "alias": [
+          "小刚"
+         ],
+         "born": {
+          "birth_date": "1969年06月07日"
+         },
+         "career": {
+          "occupations": [
+           "DJ",
+           "作曲家"
+          ]
+         },
+         "count_albums": 44,
+         "count_tracks": 306,
+         "full_display_name": "周传雄",
+         "id": "6817999656132282370",
+         "intro": "中国台湾流行乐男歌手、曲作者、音乐制作人。 1988年参加“台湾校园歌唱比赛”，被选为小虎队第一批候选成员，后因个人原因放弃加入小虎队。1989年以艺名“小刚”推出首支个人原创单曲《尘烟》。1990年推出首张个人音乐专辑《双子星的对话》。1992年推出第4张个人音乐专辑《小刚的花花世界》。1996年推出第8张个人音乐专辑《我的心太乱》。 1997年开始转型幕后制作人工作，以本名周传雄发表作品。2000年发表个人创作专辑《Transfer》。2001年出演个人首部电视剧《薰衣草》。2004年在新加坡举办“我在身边”首次个人售票演唱会。2006年获得“中国原创歌曲总评榜”港台地区最佳唱作人奖。2007年获得“第一届无线音乐俱乐部颁奖典礼”年度最畅销作曲奖。2009年获得“音乐大典”年度最佳唱作人 。2012年凭借专辑《打扰爱情》获得“音乐先锋榜”最佳专辑奖、年度K歌王、最佳创作歌手奖。 2014年胃病痊愈后推出个人音乐专辑《时不知归》。2015年9月举办“时不知归”全球巡回演唱会。2019年12月起举办“青花传情”全球巡回演唱会。代表作：《哈萨雅琪》、《我的心太乱》、《黄昏》、《寂寞沙洲冷》、《青花》、《关不上的窗》。",
+         "name": "周传雄",
+         "name_translation": "Steve Chou",
+         "nationality": "中国(台湾)",
+         "search_explain_info": "",
+         "simple_display_name": "周传雄",
+         "url_avatar": {
+          "expire_time": 0,
+          "height": 0,
+          "need_complete_url": false,
+          "template": "",
+          "template_prefix": "tplv-b829550vbb",
+          "uri": "tos-cn-v-2774c002/oEEAlpctwBdAMgZe54ECDFEBz3Ddn5AHIfChOQ",
+          "urls": [
+           "https://p3-luna.douyinpic.com/img/",
+           "https://p6-luna.douyinpic.com/img/"
+          ],
+          "width": 0
+         }
+        },
+        "relation": {
+         "user_artist_type": 1
+        },
+        "state": {
+         "blocked_by_me": false
+        },
+        "stats": {}
+       },
+       "deeplink": {},
+       "id": "6817999656132282370",
+       "item_type": "artist",
+       "playlist": {},
+       "scene_mode": {},
+       "search_segment": {},
+       "track": {},
+       "video": {}
+      },
+      "meta": {
+       "activity_match": {},
+       "display_style": {},
+       "doc_id": "53b3666137820fba-8463f60c4cc370eb",
+       "item_type": "artist",
+       "lyrics_match": {
+        "match_end_index": 0,
+        "match_start_index": 0,
+        "snippet": ""
+       },
+       "track_match": {}
+      }
+     },
+     {
+      "entity": {
+       "album": {},
+       "artist": {
+        "base_info": {
+         "alias": [],
+         "born": {
+          "birth_date": ""
+         },
+         "career": {
+          "occupations": []
+         },
+         "count_albums": 1,
+         "count_tracks": 1,
+         "full_display_name": "周杰伦",
+         "id": "7629000950985279531",
+         "intro": "",
+         "name": "周杰伦",
+         "name_translation": "",
+         "nationality": "",
+         "search_explain_info": "",
+         "simple_display_name": "周杰伦",
+         "url_avatar": {
+          "expire_time": 0,
+          "height": 0,
+          "need_complete_url": false,
+          "template": "",
+          "template_prefix": "tplv-b829550vbb",
+          "uri": "tos-cn-v-2774c002/osGMAgBrICfTFIIRfezwaWpD3PnIMAv2AXFALU",
+          "urls": [
+           "https://p3-luna.douyinpic.com/img/",
+           "https://p6-luna.douyinpic.com/img/"
+          ],
+          "width": 0
+         }
+        },
+        "relation": {
+         "user_artist_type": 1
+        },
+        "state": {
+         "blocked_by_me": false
+        },
+        "stats": {}
+       },
+       "deeplink": {},
+       "id": "7629000950985279531",
+       "item_type": "artist",
+       "playlist": {},
+       "scene_mode": {},
+       "search_segment": {},
+       "track": {},
+       "video": {}
+      },
+      "meta": {
+       "activity_match": {},
+       "display_style": {},
+       "doc_id": "124fef0debdb31a3-c9600e547f415e4b",
+       "item_type": "artist",
+       "lyrics_match": {
+        "match_end_index": 0,
+        "match_start_index": 0,
+        "snippet": ""
+       },
+       "track_match": {}
+      }
+     }
+    ],
+    "description": "",
+    "display_title": "",
+    "display_type": "",
+    "display_view_all": false,
+    "has_more": true,
+    "id": "artists",
+    "next_cursor": "20"
+   }
+  ]
+ },
+ "err_msg": "",
+ "err_no": 0,
+ "log_id": "SANITIZED",
+ "now": 1793750333
+}

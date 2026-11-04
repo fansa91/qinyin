@@ -201,7 +201,7 @@ class QishuiService {
     return tracks;
   }
 
-  /// 搜索联想词（全文搜索游客被服务端掏空，本 App 不提供假结果）
+  /// 搜索联想词（全文搜索走车机平台通道，见 PlatformFeedService.searchPage）
   Future<List<String>> sug(String q) async {
     if (q.trim().isEmpty) return const [];
     final body = await _get('/luna/sug', {
@@ -242,11 +242,21 @@ class QishuiService {
 class PlatformFeedService {
   static const String host = 'https://open.douyin.com';
   static const String feedPath = '/api/luna/v1/platform/feed/song-tab/';
+  static const String searchPath = '/api/luna/v1/platform/search/';
+  static const String tokenUrl =
+      'https://open.qishui.com/api/luna/v1/platform/client/token/get/';
   static const String sdkUa = 'LunaOpenSDK/1.0.10';
   static const String _kDeviceId = 'platform_device_id';
 
   final Dio _dio;
   final String deviceId;
+
+  /// 客户端令牌（公共读接口的 access-token 头）：实测形状为**顶层**
+  /// client_token 字段（不在 data 里），见 QISHUI_API.md §16.1。
+  /// 取不到不阻塞任何请求（feed/搜索裸调亦可通），只在 err_no 28001008
+  /// （令牌过期）时丢弃重取并重试一次。
+  String? _clientToken;
+  Future<String?>? _tokenInFlight;
 
   PlatformFeedService({required this.deviceId, Dio? dio})
       : _dio = dio ??
@@ -324,5 +334,210 @@ class PlatformFeedService {
     }
     final data = (body['data'] as Map<String, dynamic>?) ?? const {};
     return (QishuiService.parsePlatformItems(body), data['has_more'] == true);
+  }
+
+  Map<String, String> _params() => commonParams(
+        deviceId,
+        timestampSeconds: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+        nonce: Random().nextInt(1000000000),
+      );
+
+  /// 尽力取客户端令牌：成功缓存并复用，失败返回 null（不抛、不阻塞）。
+  /// 响应形状（2026-11-04 实测）：{client_token: "clt.…", err_no: 0,
+  /// expires_time: <远未来>}——client_token 在顶层，data 里没有。
+  Future<String?> clientToken() {
+    if (_clientToken != null) return Future.value(_clientToken);
+    return _tokenInFlight ??= () async {
+      try {
+        final resp = await _dio.get<dynamic>(
+          tokenUrl,
+          queryParameters: {..._params(), 'trigger_type': 'cold_start'},
+          options: Options(headers: {'User-Agent': sdkUa}),
+        );
+        final body = (resp.data as Map).cast<String, dynamic>();
+        final token = body['client_token'];
+        if (body['err_no'] == 0 && token is String && token.isNotEmpty) {
+          _clientToken = token;
+          return token;
+        }
+        return null;
+      } catch (_) {
+        return null;
+      } finally {
+        _tokenInFlight = null;
+      }
+    }();
+  }
+
+  /// 平台搜索一页原始组数据 → (entity 列表, hasMore, nextCursor)。
+  /// 组选取照 GSQZ 口径：优先 id == "${type}s" 的组，没有时退回第一组。
+  static (List<Map<String, dynamic>>, bool, String?) parseSearchGroup(
+    Map<String, dynamic> body,
+    String type,
+  ) {
+    final data = (body['data'] as Map<String, dynamic>?) ?? const {};
+    final groups = (data['result_groups'] as List?) ?? const [];
+    Map<String, dynamic>? group;
+    for (final g in groups) {
+      if (g is Map<String, dynamic> && g['id'] == '${type}s') {
+        group = g;
+        break;
+      }
+    }
+    group ??= groups.isNotEmpty && groups.first is Map<String, dynamic>
+        ? groups.first as Map<String, dynamic>
+        : null;
+    if (group == null) return (const [], false, null);
+    final entities = <Map<String, dynamic>>[];
+    for (final item in (group['data'] as List?) ?? const []) {
+      if (item is! Map<String, dynamic>) continue;
+      final entity = item['entity'] as Map<String, dynamic>?;
+      if (entity != null) entities.add(entity);
+    }
+    final next = group['next_cursor'];
+    return (
+      entities,
+      group['has_more'] == true,
+      next == null ? null : '$next',
+    );
+  }
+
+  /// 平台搜索 entity 列表 → 曲目（entity.track 就是 feed 同款 track_entity）
+  static List<Track> parseSearchTracks(List<Map<String, dynamic>> entities) {
+    final tracks = <Track>[];
+    for (final e in entities) {
+      final track = e['track'] as Map<String, dynamic>?;
+      if (track == null) continue;
+      final t = Track.fromPlatformMedia({'track_entity': track});
+      if (t != null) tracks.add(t);
+    }
+    return tracks;
+  }
+
+  /// 平台搜索 entity 列表 → 歌单（entity.playlist 与 App 侧歌单同形状）
+  static List<Playlist> parseSearchPlaylists(
+      List<Map<String, dynamic>> entities) {
+    final playlists = <Playlist>[];
+    for (final e in entities) {
+      final p = e['playlist'] as Map<String, dynamic>?;
+      if (p == null || p.isEmpty) continue;
+      final playlist = Playlist.fromJson(p);
+      if (playlist.id.isNotEmpty && playlist.title.isNotEmpty) {
+        playlists.add(playlist);
+      }
+    }
+    return playlists;
+  }
+
+  /// 平台搜索 entity 列表 → 歌手（entity.artist.base_info）
+  static List<ArtistHit> parseSearchArtists(
+      List<Map<String, dynamic>> entities) {
+    final artists = <ArtistHit>[];
+    for (final e in entities) {
+      final a = e['artist'] as Map<String, dynamic>?;
+      final base = a?['base_info'] as Map<String, dynamic>?;
+      if (base == null) continue;
+      final hit = ArtistHit.fromPlatformBaseInfo(base);
+      if (hit != null) artists.add(hit);
+    }
+    return artists;
+  }
+
+  /// 搜索请求体（纯函数便于单测）：search_id 在一次搜索会话内固定，
+  /// 由调用方生成并在翻页时复用；换关键词必须换新的。
+  static Map<String, dynamic> searchBody({
+    required String query,
+    required String type,
+    required String cursor,
+    required String searchId,
+  }) =>
+      {
+        'q': query,
+        'cursor': cursor,
+        'search_id': searchId,
+        'from_search_id': searchId,
+        'search_method': 'input',
+        'search_type': type,
+        'search_scene': 'normal',
+        'scene_name': 'search',
+        'ab_param': '',
+        'last_viewed_media': <String, dynamic>{},
+        'common_params': <String, dynamic>{},
+      };
+
+  static String newSearchId() {
+    final rnd = Random();
+    String hex(int n) =>
+        List.generate(n, (_) => rnd.nextInt(16).toRadixString(16)).join();
+    return '${hex(8)}-${hex(4)}-4${hex(3)}-${hex(4)}-${hex(12)}';
+  }
+
+  /// 平台搜索一页 → (entity 列表, hasMore, nextCursor)。
+  /// [type] 为 'track' / 'playlist' / 'artist'（均已实测，见 §16；
+  /// 其中 playlist 游客态当前上游恒空——err_no=0、result_groups=[]）。
+  /// err_no 28001008（令牌过期）时刷新令牌重试一次；其余 err_no 抛
+  /// StateError 供上层走失败态。
+  Future<(List<Map<String, dynamic>>, bool, String?)> searchPage({
+    required String query,
+    required String type,
+    required String searchId,
+    String cursor = '0',
+  }) async {
+    for (var attempt = 0; ; attempt++) {
+      final token = await clientToken();
+      final headers = <String, dynamic>{'User-Agent': sdkUa};
+      if (token != null) headers['access-token'] = token;
+      final resp = await _dio.post<dynamic>(
+        searchPath,
+        queryParameters: _params(),
+        data: searchBody(
+          query: query,
+          type: type,
+          cursor: cursor,
+          searchId: searchId,
+        ),
+        options: Options(headers: headers),
+      );
+      final body = (resp.data as Map).cast<String, dynamic>();
+      final errNo = body['err_no'];
+      if (errNo == 28001008 && attempt == 0) {
+        _clientToken = null; // 令牌过期：丢弃，下轮重取后重试一次
+        continue;
+      }
+      if (errNo != null && errNo != 0) {
+        throw StateError('platform search err_no=$errNo ${body['err_msg'] ?? ''}');
+      }
+      return parseSearchGroup(body, type);
+    }
+  }
+
+  Future<(List<Track>, bool, String?)> searchTracks({
+    required String query,
+    required String searchId,
+    String cursor = '0',
+  }) async {
+    final (entities, hasMore, next) = await searchPage(
+        query: query, type: 'track', searchId: searchId, cursor: cursor);
+    return (parseSearchTracks(entities), hasMore, next);
+  }
+
+  Future<(List<Playlist>, bool, String?)> searchPlaylists({
+    required String query,
+    required String searchId,
+    String cursor = '0',
+  }) async {
+    final (entities, hasMore, next) = await searchPage(
+        query: query, type: 'playlist', searchId: searchId, cursor: cursor);
+    return (parseSearchPlaylists(entities), hasMore, next);
+  }
+
+  Future<(List<ArtistHit>, bool, String?)> searchArtists({
+    required String query,
+    required String searchId,
+    String cursor = '0',
+  }) async {
+    final (entities, hasMore, next) = await searchPage(
+        query: query, type: 'artist', searchId: searchId, cursor: cursor);
+    return (parseSearchArtists(entities), hasMore, next);
   }
 }

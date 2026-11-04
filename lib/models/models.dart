@@ -85,6 +85,29 @@ class ArtistRef {
       };
 }
 
+/// 平台搜索的歌手结果：基础信息 + 曲目/专辑数（列表副标题用）
+class ArtistHit {
+  final ArtistRef artist;
+  final int countTracks;
+  final int countAlbums;
+  const ArtistHit({
+    required this.artist,
+    this.countTracks = 0,
+    this.countAlbums = 0,
+  });
+
+  /// 平台搜索 entity.artist.base_info（name/url_avatar 与 ArtistRef.fromJson 同口径）
+  static ArtistHit? fromPlatformBaseInfo(Map<String, dynamic> base) {
+    final ref = ArtistRef.fromJson(base);
+    if (ref.id.isEmpty) return null;
+    return ArtistHit(
+      artist: ref,
+      countTracks: _int(base['count_tracks']),
+      countAlbums: _int(base['count_albums']),
+    );
+  }
+}
+
 /// 曲目（列表/详情各接口的 track 对象形状统一到这里）
 class Track {
   final String id;

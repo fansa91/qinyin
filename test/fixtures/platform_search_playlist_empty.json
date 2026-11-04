@@ -1,0 +1,15 @@
+{
+ "data": {
+  "extra": {
+   "background_color": "",
+   "empty_search": 2,
+   "log_extra": "{\"query_intention_type\":\"music_related\"}",
+   "search_related_info": ""
+  },
+  "result_groups": []
+ },
+ "err_msg": "",
+ "err_no": 0,
+ "log_id": "SANITIZED",
+ "now": 1793750220
+}
