@@ -11,6 +11,7 @@ import '../services/recommend_pager.dart';
 import '../services/settings_service.dart';
 import '../widgets/cover_image.dart';
 import '../widgets/fresh_pager.dart';
+import '../widgets/seek_bar.dart';
 import 'player_screen.dart';
 
 /// 推荐：页面本体就是新鲜模式播放形态（定版样板图口径）。
@@ -22,6 +23,11 @@ import 'player_screen.dart';
 ///
 /// 形态：直接复用 [FreshPager]（与播放页同一份纵向 PageView + 队列推进
 /// 实现），队列就是推荐流，队尾 loadMore 接 [RecommendPager]。
+/// 单页内部再套一层横向分页：右滑进当前曲的歌词页、左滑回推荐流页；
+/// 底部是可拖动 SeekBar（无「发现/播放/我的」三键行——回首页/我的走
+/// 壳层导航）；点评论开遮盖式抽屉（浮层盖住本页、底层不动）。
+/// 整个页面包在 SafeArea 里：本页是壳层里唯一没有 AppBar 的主页面，
+/// 不包就会与 iPhone 状态栏时间重叠（用户实报）。
 /// 桌面端（≥900）沿用现有双栏播放页 [DesktopPlayer]，不强求滑动。
 ///
 /// 进页衔接策略（不打断优先）：
@@ -32,13 +38,9 @@ import 'player_screen.dart';
 class RecommendScreen extends StatefulWidget {
   /// 当前是否被选中展示（IndexedStack 下靠它感知「进入本页」）
   final bool active;
-  final VoidCallback? onGoHome;
-  final VoidCallback? onGoMine;
   const RecommendScreen({
     super.key,
     this.active = false,
-    this.onGoHome,
-    this.onGoMine,
   });
 
   @override
@@ -233,26 +235,33 @@ class _RecommendScreenState extends State<RecommendScreen> {
   Widget build(BuildContext context) {
     final player = context.watch<PlayerService>();
     final enter = _decide(player);
+    final Widget content;
     if (enter == RecommendEnter.showPager) {
       if (isExpanded(context)) {
         // 桌面双栏播放形态之上保留推荐页头（刷新/列表/搜索入口不丢）
-        return Column(
+        content = Column(
           children: [
             _header(context),
             const Expanded(child: DesktopPlayer()),
           ],
         );
+      } else {
+        content = _buildSwipe(context);
       }
-      return _buildSwipe(context);
+    } else if (enter == RecommendEnter.showGate) {
+      content = _buildGate(context, player);
+    } else if (_initError != null || _startFailed) {
+      // startQueue 分支：自动建队失败重试
+      content = _buildError(context);
+    } else {
+      // startQueue 分支：自动建队进行中
+      content = _buildLoading(context);
     }
-    if (enter == RecommendEnter.showGate) {
-      return _buildGate(context, player);
-    }
-    // startQueue 分支：自动建队进行中 / 失败重试
-    if (_initError != null || _startFailed) {
-      return _buildError(context);
-    }
-    return _buildLoading(context);
+    // 顶部安全区：本页无 AppBar，header 与右侧页指示点等贴边元素都要
+    // 让开状态栏/刘海（iPhone 上 header 曾与状态栏时间重叠，用户实报）。
+    // bottom 不包：页面下缘贴的是壳层导航栏而非屏幕边缘，导航栏自理
+    // 底部 inset，包了反而多出一条空白。
+    return SafeArea(bottom: false, child: content);
   }
 
   Widget _header(BuildContext context) {
@@ -315,8 +324,6 @@ class _RecommendScreenState extends State<RecommendScreen> {
                 pageBuilder: (context, track, i) => _RecommendFreshPage(
                   track: track,
                   index: i,
-                  onGoHome: widget.onGoHome,
-                  onGoMine: widget.onGoMine,
                 ),
               ),
               // 右侧页指示点（窗口化：以当前页为中心最多 9 个）
@@ -509,27 +516,44 @@ class _RecommendScreenState extends State<RecommendScreen> {
 }
 
 /// 推荐页的新鲜模式单页（按定版样板图）：大封面（右上角实际音质芯片）、
-/// 歌名/歌手、一行当前歌词、只读互动计数排、下一首露出条、底部三键。
-class _RecommendFreshPage extends StatelessWidget {
+/// 歌名/歌手、一行当前歌词、只读互动计数排、下一首露出条，底部 SeekBar。
+///
+/// 页面内部再分横向两页（横向 PageView，初始停在推荐流页）：
+/// - 右滑 → 左侧的歌词页（当前曲歌词，同步滚动沿用播放页 [LyricList]）；
+/// - 左滑 → 回推荐流页。
+/// 横向分页只吃横向拖动，纵向手势仍归外层 FreshPager 切歌（歌词列表
+/// 禁用手动滚动也是为此，见 [LyricList] 口径），两边互不吞手势。
+/// 评论不切页不开新页：点计数开遮盖式抽屉，浮层盖在本页之上。
+class _RecommendFreshPage extends StatefulWidget {
   final Track track;
   final int index;
-  final VoidCallback? onGoHome;
-  final VoidCallback? onGoMine;
   const _RecommendFreshPage({
     required this.track,
     required this.index,
-    this.onGoHome,
-    this.onGoMine,
   });
+
+  @override
+  State<_RecommendFreshPage> createState() => _RecommendFreshPageState();
+}
+
+class _RecommendFreshPageState extends State<_RecommendFreshPage> {
+  /// 横向分页：0 歌词页（在左）、1 推荐流页（初始停靠页）
+  late final PageController _hController = PageController(initialPage: 1);
+
+  @override
+  void dispose() {
+    _hController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final player = context.watch<PlayerService>();
     final resolver = context.read<PlayResolver>();
-    final isCurrent = player.currentIndex == index;
+    final isCurrent = player.currentIndex == widget.index;
     final seo = isCurrent
-        ? player.currentSeo ?? resolver.cachedSeo(track.id)
-        : resolver.cachedSeo(track.id);
+        ? player.currentSeo ?? resolver.cachedSeo(widget.track.id)
+        : resolver.cachedSeo(widget.track.id);
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -542,14 +566,14 @@ class _RecommendFreshPage extends StatelessWidget {
         ),
       ),
       child: FutureBuilder<SeoTrack>(
-        future: seo != null ? Future.value(seo) : resolver.seo(track.id),
+        future: seo != null ? Future.value(seo) : resolver.seo(widget.track.id),
         builder: (context, snap) => _content(context, snap.data, isCurrent),
       ),
     );
   }
 
   Color _tintOf(BuildContext context) {
-    final hex = track.coverColorHex;
+    final hex = widget.track.coverColorHex;
     if (hex != null && hex.length == 6) {
       final v = int.tryParse(hex, radix: 16);
       if (v != null) return Color(0xFF000000 | v);
@@ -560,165 +584,36 @@ class _RecommendFreshPage extends StatelessWidget {
   Widget _content(BuildContext context, SeoTrack? seo, bool isCurrent) {
     final player = context.watch<PlayerService>();
     final scheme = Theme.of(context).colorScheme;
-    final fullTrack = seo?.track ?? track;
+    final fullTrack = seo?.track ?? widget.track;
     final lines = seo?.lyricLines ?? const <LyricLine>[];
     final lineIndex = isCurrent ? lyricIndexAt(lines, player.position) : -1;
-    final currentLyric = lines.isEmpty
-        ? ''
-        : lines[(lineIndex < 0 ? 0 : lineIndex).clamp(0, lines.length - 1)]
-            .text;
-    final nextTrack = isCurrent &&
-            player.currentIndex + 1 < player.queueItems.length
-        ? player.queueItems[player.currentIndex + 1]
-        : null;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Stack(
-            children: [
-              GestureDetector(
-                onTap: seo == null
-                    ? null
-                    : () => Navigator.push(
-                          context,
-                          MaterialPageRoute<void>(
-                            builder: (_) => LyricsScreen(seo: seo),
-                          ),
-                        ),
-                child: CoverImage(
-                  cover: fullTrack.cover,
-                  width: double.infinity,
-                  height: MediaQuery.sizeOf(context).height * 0.34,
-                  radius: 16,
-                  small: false,
-                ),
-              ),
-              if (isCurrent)
-                Positioned(
-                  top: 10,
-                  right: 10,
-                  child: _qualityChip(context, player),
-                ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          SizedBox(
-            height: 20,
-            child: currentLyric.isEmpty
-                ? null
-                : Text(
-                    '“$currentLyric”',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodyMedium
-                        ?.copyWith(color: scheme.onSurfaceVariant),
-                  ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            fullTrack.name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            fullTrack.artistNames,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context)
-                .textTheme
-                .titleMedium
-                ?.copyWith(color: scheme.onSurfaceVariant),
-          ),
-          const SizedBox(height: 14),
-          // 互动计数（平台/seo 真数字，只读展示，不做假互动）
-          Row(
-            children: [
-              _ReadStat(
-                icon: Icons.favorite,
-                label: formatCount(fullTrack.countCollected ?? 0),
-              ),
-              const SizedBox(width: 26),
-              _ReadStat(
-                icon: Icons.mode_comment,
-                label: formatCount(fullTrack.countComment ?? 0),
-              ),
-              const SizedBox(width: 26),
-              _ReadStat(
-                icon: Icons.share,
-                label: formatCount(fullTrack.countShared ?? 0),
-              ),
-            ],
-          ),
-          const Spacer(),
-          if (nextTrack != null)
-            Material(
-              color: scheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(12),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(12),
-                onTap: () => player.next(),
-                child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  child: Row(
-                    children: [
-                      CoverImage(
-                          cover: nextTrack.cover, width: 36, height: 36),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          '下一首：${nextTrack.name} — ${nextTrack.artistNames}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                      ),
-                      const Icon(Icons.keyboard_arrow_up, size: 20),
-                    ],
-                  ),
-                ),
-              ),
+          Expanded(
+            child: PageView(
+              controller: _hController,
+              children: [
+                _lyricsPane(context, lines, lineIndex),
+                _mainPane(context, seo, fullTrack, lines, lineIndex, isCurrent),
+              ],
             ),
-          const SizedBox(height: 10),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _RecKey(
-                icon: Icons.headphones_outlined,
-                label: '发现',
-                onTap: onGoHome ??
-                    () => Navigator.popUntil(context, (r) => r.isFirst),
-              ),
-              IconButton.filled(
-                iconSize: 34,
-                icon: Icon((player.loading || player.preparingLossless) &&
-                        isCurrent
-                    ? Icons.hourglass_top
-                    : (player.playing && isCurrent)
-                        ? Icons.pause
-                        : Icons.play_arrow),
-                onPressed: () async {
-                  if (isCurrent) {
-                    await player.toggle();
-                  } else {
-                    await player.jumpTo(index);
-                  }
-                },
-              ),
-              _RecKey(
-                icon: Icons.person_outline,
-                label: '我的',
-                onTap: onGoMine ??
-                    () => Navigator.popUntil(context, (r) => r.isFirst),
-              ),
-            ],
           ),
+          const SizedBox(height: 10),
+          // 底部整行 = 进度条：原「发现 / 播放 / 我的」三键行已去掉
+          // （回首页/我的走壳层导航），与播放页共用同一 SeekBar 行为。
+          if (isCurrent)
+            SeekBar(
+              position: player.position,
+              duration: player.duration,
+              onSeek: player.seek,
+              showTimes: true,
+            )
+          else
+            // 非当前页占位（与播放页同口径），避免切页时底部高度跳动
+            const SizedBox(height: 76),
           if (player.error != null && isCurrent)
             Padding(
               padding: const EdgeInsets.only(top: 6),
@@ -730,6 +625,195 @@ class _RecommendFreshPage extends StatelessWidget {
     );
   }
 
+  /// 推荐流页（横向分页右侧页）：封面/歌名/歌手/计数排/下一首露出条。
+  Widget _mainPane(
+    BuildContext context,
+    SeoTrack? seo,
+    Track fullTrack,
+    List<LyricLine> lines,
+    int lineIndex,
+    bool isCurrent,
+  ) {
+    final player = context.watch<PlayerService>();
+    final scheme = Theme.of(context).colorScheme;
+    final currentLyric = lines.isEmpty
+        ? ''
+        : lines[(lineIndex < 0 ? 0 : lineIndex).clamp(0, lines.length - 1)]
+            .text;
+    final nextTrack = isCurrent &&
+            player.currentIndex + 1 < player.queueItems.length
+        ? player.queueItems[player.currentIndex + 1]
+        : null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Stack(
+          children: [
+            GestureDetector(
+              onTap: seo == null
+                  ? null
+                  : () => Navigator.push(
+                        context,
+                        MaterialPageRoute<void>(
+                          builder: (_) => LyricsScreen(seo: seo),
+                        ),
+                      ),
+              child: CoverImage(
+                cover: fullTrack.cover,
+                width: double.infinity,
+                height: MediaQuery.sizeOf(context).height * 0.34,
+                radius: 16,
+                small: false,
+              ),
+            ),
+            if (isCurrent)
+              Positioned(
+                top: 10,
+                right: 10,
+                child: _qualityChip(context, player),
+              ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        SizedBox(
+          height: 20,
+          child: currentLyric.isEmpty
+              ? null
+              : Text(
+                  '“$currentLyric”',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodyMedium
+                      ?.copyWith(color: scheme.onSurfaceVariant),
+                ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          fullTrack.name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.headlineSmall,
+        ),
+        const SizedBox(height: 4),
+        Text(
+          fullTrack.artistNames,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context)
+              .textTheme
+              .titleMedium
+              ?.copyWith(color: scheme.onSurfaceVariant),
+        ),
+        const SizedBox(height: 14),
+        // 互动计数（平台/seo 真数字，只读展示，不做假互动）；
+        // 评论计数可点：开遮盖式评论抽屉（见 _showComments）
+        Row(
+          children: [
+            _ReadStat(
+              icon: Icons.favorite,
+              label: formatCount(fullTrack.countCollected ?? 0),
+            ),
+            const SizedBox(width: 26),
+            _ReadStat(
+              icon: Icons.mode_comment,
+              label: formatCount(fullTrack.countComment ?? 0),
+              onTap: seo == null ? null : () => _showComments(context, seo),
+            ),
+            const SizedBox(width: 26),
+            _ReadStat(
+              icon: Icons.share,
+              label: formatCount(fullTrack.countShared ?? 0),
+            ),
+          ],
+        ),
+        const Spacer(),
+        if (nextTrack != null)
+          Material(
+            color: scheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(12),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () => player.next(),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                child: Row(
+                  children: [
+                    CoverImage(cover: nextTrack.cover, width: 36, height: 36),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        '下一首：${nextTrack.name} — ${nextTrack.artistNames}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ),
+                    const Icon(Icons.keyboard_arrow_up, size: 20),
+                  ],
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  /// 歌词页（横向分页左侧页）：与播放页共用同一份 [LyricList]
+  /// （当前行高亮 + 同步自动滚动）；禁手动滚动，纵向手势留给外层切歌。
+  Widget _lyricsPane(
+      BuildContext context, List<LyricLine> lines, int lineIndex) {
+    final scheme = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.lyrics_outlined, size: 18, color: scheme.primary),
+            const SizedBox(width: 6),
+            Text('歌词', style: Theme.of(context).textTheme.titleMedium),
+            const Spacer(),
+            Text(
+              '左滑回推荐',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: scheme.onSurfaceVariant),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Expanded(
+          child: LyricList(
+            lines: lines,
+            currentIndex: lineIndex,
+            userScrollable: false,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// 评论抽屉（遮盖式）：showModalBottomSheet 是独立浮层路由，盖在
+  /// 推荐页之上——底层页面只被遮罩压暗，不位移、不挤压。高度取
+  /// 约五成屏高（≈50%，用户定版口径），带拖动把手，可下拉关闭、
+  /// 点遮罩关闭。评论内容复用共享只读 [CommentsList]。
+  void _showComments(BuildContext context, SeoTrack seo) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) => SizedBox(
+        height: MediaQuery.sizeOf(ctx).height * 0.5,
+        child: SafeArea(
+          top: false,
+          child: CommentsList(comments: seo.comments),
+        ),
+      ),
+    );
+  }
   /// 右上角音质芯片：只显示当前曲实际在播的档，准备无损时显示准备态，
   /// 绝不按设置值虚报
   Widget _qualityChip(BuildContext context, PlayerService player) {
@@ -780,12 +864,13 @@ class _RecommendFreshPage extends StatelessWidget {
 class _ReadStat extends StatelessWidget {
   final IconData icon;
   final String label;
-  const _ReadStat({required this.icon, required this.label});
+  final VoidCallback? onTap;
+  const _ReadStat({required this.icon, required this.label, this.onTap});
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Row(
+    final row = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Icon(icon, size: 20, color: scheme.primary),
@@ -793,22 +878,13 @@ class _ReadStat extends StatelessWidget {
         Text(label, style: Theme.of(context).textTheme.titleSmall),
       ],
     );
-  }
-}
-
-class _RecKey extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  const _RecKey({required this.icon, required this.label, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
+    if (onTap == null) return row;
     return InkWell(
       onTap: onTap,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [Icon(icon), Text(label, style: const TextStyle(fontSize: 12))],
+      borderRadius: BorderRadius.circular(20),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+        child: row,
       ),
     );
   }

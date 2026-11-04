@@ -171,8 +171,6 @@ class _AppShellState extends State<AppShell> {
         const HomeScreen(),
         RecommendScreen(
           active: _currentIndex == 1,
-          onGoHome: () => setState(() => _currentIndex = 0),
-          onGoMine: () => setState(() => _currentIndex = 3),
         ),
         const DownloadsScreen(),
         LibraryScreen(
@@ -204,6 +202,12 @@ class _AppShellState extends State<AppShell> {
     return Focus(autofocus: true, child: child);
   }
 
+  /// 推荐页（下标 1）自带完整播放面（封面 + SeekBar + 队列推进），
+  /// 再叠一条 mini 播放条纯属重复 → 移动壳层在该页隐藏 mini 条；
+  /// 直接从布局列里摘掉（不留占位），页面内容自然补满，无空白/跳动。
+  /// 桌面 expanded 不在此列：其双栏播放页没有自带底栏，通栏条要留。
+  bool get _showMiniPlayer => _currentIndex != 1;
+
   Widget _buildCompact() {
     return Scaffold(
       body: Column(
@@ -211,7 +215,7 @@ class _AppShellState extends State<AppShell> {
           Expanded(
             child: IndexedStack(index: _currentIndex, children: _pages),
           ),
-          MiniPlayer(onTapCover: _openPlayer),
+          if (_showMiniPlayer) MiniPlayer(onTapCover: _openPlayer),
         ],
       ),
       bottomNavigationBar: NavigationBar(
@@ -279,7 +283,7 @@ class _AppShellState extends State<AppShell> {
               ],
             ),
           ),
-          MiniPlayer(onTapCover: _openPlayer, fullBar: true),
+          if (_showMiniPlayer) MiniPlayer(onTapCover: _openPlayer, fullBar: true),
         ],
       ),
     );

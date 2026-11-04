@@ -268,7 +268,7 @@ class _FreshContentState extends State<_FreshContent> {
           const SizedBox(height: 4),
           Expanded(
             child: _tab == 0
-                ? _LyricList(
+                ? LyricList(
                     lines: lines,
                     currentIndex: currentLineIndex,
                     userScrollable: false,
@@ -562,7 +562,7 @@ class DesktopPlayer extends StatelessWidget {
                           Expanded(
                             child: TabBarView(
                               children: [
-                                _LyricList(lines: lines, currentIndex: idx),
+                                LyricList(lines: lines, currentIndex: idx),
                                 CommentsList(
                                     comments: seo?.comments ?? const []),
                               ],
@@ -618,30 +618,33 @@ class DesktopPlayer extends StatelessWidget {
   }
 }
 
-/// 歌词滚动列表（当前行高亮 + 自动滚动）。
+/// 歌词滚动列表（当前行高亮 + 自动滚动）。播放页与推荐页的歌词页共用
+/// 同一份实现（推荐页经 player_screen 导出复用，不要再造第二份）。
 /// [userScrollable]=false 时禁用手动滚动（新鲜模式页内嵌用法：纵向手势
 /// 要留给 PageView 切歌，不能被歌词列表抢走；自动滚动不受影响）。
-class _LyricList extends StatefulWidget {
+class LyricList extends StatefulWidget {
   final List<LyricLine> lines;
   final int currentIndex;
   final bool userScrollable;
-  const _LyricList({
+  const LyricList({
+    super.key,
     required this.lines,
     required this.currentIndex,
     this.userScrollable = true,
   });
 
   @override
-  State<_LyricList> createState() => _LyricListState();
+  State<LyricList> createState() => LyricListState();
 }
 
-class _LyricListState extends State<_LyricList> {
+class LyricListState extends State<LyricList> {
   final ScrollController _controller = ScrollController();
 
   @override
-  void didUpdateWidget(_LyricList old) {
-    super.didUpdateWidget(old);
-    if (widget.currentIndex != old.currentIndex && widget.currentIndex >= 0) {
+  void didUpdateWidget(LyricList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.currentIndex != oldWidget.currentIndex &&
+        widget.currentIndex >= 0) {
       // 等一帧再滚：PageView 页内初建/切换时 controller 可能尚未挂载，
       // 直接 animateTo 会抛 'ScrollController not attached'
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -712,7 +715,7 @@ class LyricsScreen extends StatelessWidget {
         : -1;
     return Scaffold(
       appBar: AppBar(title: Text(seo.track.name)),
-      body: _LyricList(lines: lines, currentIndex: idx),
+      body: LyricList(lines: lines, currentIndex: idx),
     );
   }
 }
